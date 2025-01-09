@@ -1,0 +1,11 @@
+database_role:
+- name: my_db_role
+  comment: to be used for aws step functions
+  depends_on: null
+  object_id_tag: c3bbddeb-d1c2-4575-8e11-34d40804889f
+- name: db_rus_kgo_v2
+  comment: to be used for aws step functions
+  depends_on: 
+    role:
+      - rus_kgo
+  object_id_tag: 82e28c10-a75a-49ba-99a2-ddd4664459ab
