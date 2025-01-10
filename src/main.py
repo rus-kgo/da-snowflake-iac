@@ -53,7 +53,7 @@ def main(session, definitions_path, resources_path):
                         utils.render_templates(
                             template_file=f"{object}.sql",
                             definition=d_state,
-                            action="create"
+                            action="CREATE"
                             )
                     )
 
@@ -66,7 +66,7 @@ def main(session, definitions_path, resources_path):
                         utils.render_templates(
                             template_file=f"{object}.sql",
                             definition=d_state,
-                            action="alter",
+                            action="ALTER",
                             new_name=alter_definition['name'],
                             old_name=sf_state['name']
                             )
@@ -81,7 +81,7 @@ def main(session, definitions_path, resources_path):
                         utils.render_templates(
                             template_file=f"{object}.sql",
                             definition=d_state,
-                            action="alter",
+                            action="ALTER",
                             )
                     )
 

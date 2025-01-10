@@ -93,6 +93,7 @@ class Utils():
 
         # Removing extra new line from the template output
         sql = re.sub(r'\n+', '\n', sql)
+        # Step 1: Replace multiple spaces with a single space
 
         return sql
 
