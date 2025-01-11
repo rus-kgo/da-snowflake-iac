@@ -5,14 +5,14 @@ import re
 from utils import Utils
 
 
-def main(session, definitions_path, resources_path):
-
+def main(session,definitions_path,resources_path):
+    """Entry point of the program."""
     try:
         utils = Utils(
             definitions_path=definitions_path,
-            resources_path=resources_path
+            resources_path=resources_path,
         )
-    except:
+    except FileNotFoundError:
         raise Exception(f"The file paths: {definitions_path = }, {resources_path = } might be wrong for current working directory: '{os.getcwd()}'")
 
     # First check if all definitions have their tags, assign a tag if not
@@ -36,13 +36,13 @@ def main(session, definitions_path, resources_path):
         
         for d_state in definition[object]:
             # This is for benefit of following the sorter order
-            if d_state['name'] == object_name:
+            if d_state["name"] == object_name:
 
                 # Here we are getting the tag to compare it with the snowfalke object instead o using the name
-                object_id_tag = d_state['object_id_tag']
+                object_id_tag = d_state["object_id_tag"]
 
                 # Making sure the object is correctly named `database role` instead of `database_role`
-                sf_object = re.sub(r'_', ' ', object)
+                sf_object = re.sub(r"_", " ", object)
 
                 # Run snowflake function to retrieve the object details as dictionary
                 sf_state = utils.snowflake_state(session="", object=sf_object, object_id_tag=object_id_tag)
@@ -53,12 +53,12 @@ def main(session, definitions_path, resources_path):
                         utils.render_templates(
                             template_file=f"{object}.sql",
                             definition=d_state,
-                            action="CREATE"
-                            )
+                            action="CREATE",
+                            ),
                     )
 
                 # If the object exists, but the definition has a new name, alter name
-                elif sf_state['name'] != d_state['name']:
+                elif sf_state["name"] != d_state["name"]:
 
                     alter_definition = utils.state_comparison(new_state=d_state, old_state=sf_state)
 
@@ -67,13 +67,13 @@ def main(session, definitions_path, resources_path):
                             template_file=f"{object}.sql",
                             definition=d_state,
                             action="ALTER",
-                            new_name=alter_definition['name'],
-                            old_name=sf_state['name']
-                            )
+                            new_name=alter_definition["name"],
+                            old_name=sf_state["name"],
+                            ),
                     )
 
                 # If the object exists and has the same name, alter the properties of the object
-                elif sf_state['name'] == d_state['name']:
+                elif sf_state["name"] == d_state["name"]:
 
                     alter_definition = utils.state_comparison(new_state=d_state, old_state=sf_state)
 
@@ -82,14 +82,14 @@ def main(session, definitions_path, resources_path):
                             template_file=f"{object}.sql",
                             definition=d_state,
                             action="ALTER",
-                            )
+                            ),
                     )
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main(
         session="",
         definitions_path="definitions",
-        resources_path="resources"
+        resources_path="resources",
     )
 
 
