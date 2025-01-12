@@ -15,7 +15,22 @@ class FilePathError(Exception):
         """Combine all invalid paths into a single string."""
         paths = "', '".join(args) 
         super().__init__(f"One of the file paths: '{paths}' - is not valid for the current working directory: '{cwd}'.")
+        
+class TemplateFileError(Exception):
+    """Raised when there is an issue with the resources template file."""
 
+    def __init__(self, file, folder, error):
+        """Define the message.
+
+        Args:
+            error (list): Jinja2 error details.
+            file (str): The name of the file containing the invalid definition.
+            folder (str): The name of the folder containing the invalid file.
+
+        """
+        message = f"Invalid or missing template file = '{file}.sql' in the resouces folder = '{folder}'.\nJinja2 error: {error}"
+
+        super().__init__(message)
 
 class DefinitionKeyError(Exception):
     """Raised when there are missing or invalid keys in a definition file."""

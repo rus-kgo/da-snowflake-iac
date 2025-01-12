@@ -20,13 +20,13 @@ from errors import DefinitionKeyError, DependencyError, FilePathError
 class Utils:
     """Contains functions designed to generate SQL queries for execution in Snowflake, following the dependency order defined in the YAML files."""
 
-    def __init__(self, resources_path: str, definitions_path: str):
+    def __init__(self, resources_folder: str, definitions_folder: str):
         """Load the templates environments and list definitions files.
 
         Args:
-            resources_path (str): Path to the folder containing Snowflake resource templates 
+            resources_folder (str): Path to the folder containing Snowflake resource templates 
                                   (SQL files with Jinja formatting).
-            definitions_path (str): Path to the folder containing Snowflake resource definitions 
+            definitions_folder (str): Path to the folder containing Snowflake resource definitions 
                                     (YAML files).
 
         """
@@ -35,11 +35,11 @@ class Utils:
         self.cwd = os.getcwd()
 
         try:
-            self.resources_env = Environment(loader=FileSystemLoader(resources_path))
-            self.definitions_path = definitions_path
-            self.definitions_files = os.listdir(f"{self.cwd}/{definitions_path}")
+            self.resources_env = Environment(loader=FileSystemLoader(f"{self.cwd}/{resources_folder}"))
+            self.definitions_path = f"{self.cwd}/{definitions_folder}"
+            self.definitions_files = os.listdir(self.definitions_path)
         except Exception:
-            raise FilePathError(definitions_path, resources_path, cwd=self.cwd)
+            raise FilePathError(definitions_folder, resources_folder, cwd=self.cwd)
 
 
     def assign_pipeline_tag_id(self) -> None:
@@ -47,7 +47,7 @@ class Utils:
         for file in self.definitions_files:
             modified = False
             # Load each definition yaml file as a dictionary
-            file_path = os.path.join(self.cwd, self.definitions_path, file)
+            file_path = os.path.join(self.definitions_path, file)
             with open(file_path) as f:
                 definition = yaml.safe_load(f)
 
@@ -72,7 +72,7 @@ class Utils:
                     
                     # Write back the modified dictionary to the YAML file
                     if modified:
-                        with open(f"{self.cwd}/{self.definitions_path}/{file}", "w") as f:
+                        with open(f"{self.definitions_path}/{file}", "w") as f:
                             yaml.dump(
                                 definition,
                                 f,
@@ -142,7 +142,7 @@ class Utils:
         map = {}
         for file in self.definitions_files:
             # Load each definition yaml file as a dictionary
-            file_path = os.path.join(self.cwd, self.definitions_path, file)
+            file_path = os.path.join(self.definitions_path, file)
             with open(file_path) as f:
                 definition = yaml.safe_load(f)
 

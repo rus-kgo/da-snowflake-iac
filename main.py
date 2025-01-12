@@ -9,15 +9,15 @@ import os
 import re
 
 from utils import Utils
-from errors import DefinitionKeyError
+from errors import DefinitionKeyError, TemplateFileError
 
 
 
-def main(session, definitions_path:str, resources_path:str):
+def main(session, definitions_folder:str, resources_folder:str):
     """Entry point of the program."""
     utils = Utils(
-        definitions_path=definitions_path,
-        resources_path=resources_path,
+        definitions_folder=definitions_folder,
+        resources_folder=resources_folder,
     )
 
     # First check if all definitions have their tags, assign a tag if not
@@ -29,7 +29,7 @@ def main(session, definitions_path:str, resources_path:str):
     # Do topographic sorting of the dependecies
     sorted_map = utils.dependencies_sort(map)["map"]
 
-    definitions_path = os.path.join(os.getcwd(), definitions_path)
+    definitions_path = os.path.join(os.getcwd(), definitions_folder)
 
     for i in sorted_map:
         object, object_name = i.split("::")
@@ -56,48 +56,52 @@ def main(session, definitions_path:str, resources_path:str):
                 sf_state = utils.snowflake_state(session=session, object=sf_object, object_id_tag=object_id_tag)
 
                 # Check if the object in the definition exists in Snowflake
-                if sf_state == {}:
-                    print(
-                        utils.render_templates(
-                            template_file=f"{object}.sql",
-                            definition=d_state,
-                            action="CREATE",
-                            ),
-                    )
+                try:
+                    if sf_state == {}:
+                        print(
+                            utils.render_templates(
+                                template_file=f"{object}.sql",
+                                definition=d_state,
+                                action="CREATE",
+                                ),
+                        )
 
-                # If the object exists, but the definition has a new name, alter name
-                elif sf_state["name"] != d_state["name"]:
+                    # If the object exists, but the definition has a new name, alter name
+                    elif sf_state["name"] != d_state["name"]:
 
-                    alter_definition = utils.state_comparison(new_state=d_state, old_state=sf_state)
+                        alter_definition = utils.state_comparison(new_state=d_state, old_state=sf_state)
 
-                    print(
-                        utils.render_templates(
-                            template_file=f"{object}.sql",
-                            definition=d_state,
-                            action="ALTER",
-                            new_name=alter_definition["name"],
-                            old_name=sf_state["name"],
-                            ),
-                    )
+                        print(
+                            utils.render_templates(
+                                template_file=f"{object}.sql",
+                                definition=d_state,
+                                action="ALTER",
+                                new_name=alter_definition["name"],
+                                old_name=sf_state["name"],
+                                ),
+                        )
 
-                # If the object exists and has the same name, alter the properties of the object
-                elif sf_state["name"] == d_state["name"]:
+                    # If the object exists and has the same name, alter the properties of the object
+                    elif sf_state["name"] == d_state["name"]:
 
-                    alter_definition = utils.state_comparison(new_state=d_state, old_state=sf_state)
+                        alter_definition = utils.state_comparison(new_state=d_state, old_state=sf_state)
 
-                    print(
-                        utils.render_templates(
-                            template_file=f"{object}.sql",
-                            definition=d_state,
-                            action="ALTER",
-                            ),
-                    )
+                        print(
+                            utils.render_templates(
+                                template_file=f"{object}.sql",
+                                definition=d_state,
+                                action="ALTER",
+                                ),
+                        )
+                except Exception as e:
+                    raise TemplateFileError(object, folder=resources_folder, error=e)
+
 
 if __name__ == "__main__":
     main(
         session="",
-        definitions_path="definitions",
-        resources_path="resources",
+        definitions_folder="definitions",
+        resources_folder="resources",
     )
 
 
