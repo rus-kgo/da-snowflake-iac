@@ -1,19 +1,24 @@
-import yaml
+"""Main entrance point of the pipeline.
+
+This module provides:
+- main: main function that orchestrates the pipeline;
+"""
+
+import yaml 
 import os
 import re
 
 from utils import Utils
+from errors import DefinitionKeyError
 
 
-def main(session,definitions_path,resources_path):
+
+def main(session, definitions_path:str, resources_path:str):
     """Entry point of the program."""
-    try:
-        utils = Utils(
-            definitions_path=definitions_path,
-            resources_path=resources_path,
-        )
-    except FileNotFoundError:
-        raise Exception(f"The file paths: {definitions_path = }, {resources_path = } might be wrong for current working directory: '{os.getcwd()}'")
+    utils = Utils(
+        definitions_path=definitions_path,
+        resources_path=resources_path,
+    )
 
     # First check if all definitions have their tags, assign a tag if not
     utils.assign_pipeline_tag_id()
@@ -31,8 +36,11 @@ def main(session,definitions_path,resources_path):
 
         file_path = os.path.join(definitions_path,f"{object}.yml")
 
-        with open(file_path) as f:
-            definition = yaml.safe_load(f)
+        try:
+            with open(file_path) as f:
+                definition = yaml.safe_load(f)
+        except FileNotFoundError:
+            raise DefinitionKeyError(object) 
         
         for d_state in definition[object]:
             # This is for benefit of following the sorter order
@@ -45,7 +53,7 @@ def main(session,definitions_path,resources_path):
                 sf_object = re.sub(r"_", " ", object)
 
                 # Run snowflake function to retrieve the object details as dictionary
-                sf_state = utils.snowflake_state(session="", object=sf_object, object_id_tag=object_id_tag)
+                sf_state = utils.snowflake_state(session=session, object=sf_object, object_id_tag=object_id_tag)
 
                 # Check if the object in the definition exists in Snowflake
                 if sf_state == {}:

@@ -1,9 +1,20 @@
+"""Utility functions and classes for the pipeline.
+
+This module provides:
+- FasterThanLightError: exception when FTL speed is calculated;
+- calculate_speed: calculate speed given distance and time.
+"""
+
 import yaml
 import os
 import re
 import uuid
 from collections import deque
 from jinja2 import Environment, FileSystemLoader
+
+from errors import DefinitionKeyError, DependencyError, FilePathError
+
+
 
 
 class Utils:
@@ -21,18 +32,22 @@ class Utils:
         """
         # TODO: make sure the file paths work for workflows
 
-        self.resources_env = Environment(loader=FileSystemLoader(resources_path))
-        self.definitions_path = definitions_path
-        self.definitions_files = os.listdir(definitions_path)
+        self.cwd = os.getcwd()
+
+        try:
+            self.resources_env = Environment(loader=FileSystemLoader(resources_path))
+            self.definitions_path = definitions_path
+            self.definitions_files = os.listdir(f"{self.cwd}/{definitions_path}")
+        except Exception:
+            raise FilePathError(definitions_path, resources_path, cwd=self.cwd)
 
 
     def assign_pipeline_tag_id(self) -> None:
         """Go through all the definitions of snowflake objects and checks if they have the `object_id_tag`. It will assign one if there is none."""
-        # Check if pipeine_id_tag exists
         for file in self.definitions_files:
             modified = False
             # Load each definition yaml file as a dictionary
-            file_path = os.path.join(self.definitions_path, file)
+            file_path = os.path.join(self.cwd, self.definitions_path, file)
             with open(file_path) as f:
                 definition = yaml.safe_load(f)
 
@@ -41,21 +56,23 @@ class Utils:
                     object = "".join(definition.keys())
 
                     for i in definition[object]:
+                        try:
+                            obj_name = i["name"]
+                        except KeyError:
+                            raise DefinitionKeyError("name", file=object)
                         # Check if object has a name and is not empy
-                        if i ["name"]:
-                            try:
+
+                        if obj_name:
+                            if "object_id_tag" in i:
                                 if not i["object_id_tag"]:
-                                    i["object_id_tag"] = str(uuid.uuid3(uuid.NAMESPACE_DNS, i["name"]))
-
+                                    i["object_id_tag"] = str(uuid.uuid3(uuid.NAMESPACE_DNS, obj_name))
                                     modified = True
-                                    print(f"Updated {i['name']} with `object_id_tag`: {i['object_id_tag']}")
-
-                            except KeyError:
-                                raise Exception(f"Definition `{i['name']}` in the `{file}` is missing the `object_id_tag` field.")
+                            else:
+                                raise DefinitionKeyError("object_id_tag", file=object, obj_name=obj_name)
                     
                     # Write back the modified dictionary to the YAML file
                     if modified:
-                        with open(f"{self.definitions_path}/{file}", "w") as f:
+                        with open(f"{self.cwd}/{self.definitions_path}/{file}", "w") as f:
                             yaml.dump(
                                 definition,
                                 f,
@@ -125,7 +142,7 @@ class Utils:
         map = {}
         for file in self.definitions_files:
             # Load each definition yaml file as a dictionary
-            file_path = os.path.join(self.definitions_path, file)
+            file_path = os.path.join(self.cwd, self.definitions_path, file)
             with open(file_path) as f:
                 definition = yaml.safe_load(f)
 
@@ -137,8 +154,9 @@ class Utils:
                 # a combination of the object and it's name.
                 # Example: "database::ajwa_presentation"
                 for i in definition[object]:
-                    o_hash = f"{object}::{i['name']}"
                     try:
+                        o_hash = f"{object}::{i['name']}"
+
                         # Check if the object definition has `depend_on` field
                         # Raise exception if as it's mandatory even if None
                         dependencies = i["depends_on"]
@@ -160,7 +178,7 @@ class Utils:
                             d_hash = []
                         map[o_hash] = d_hash
                     except KeyError:
-                        raise Exception(f"Definition named `{i['name']}` in the `{file}` is missing the `depends_on` field.")
+                        raise DefinitionKeyError("depends_on", "name", file=object)
 
         return map
 
@@ -173,7 +191,7 @@ class Utils:
                 for neighbor in map[node]:
                     in_degree[neighbor] += 1
         except KeyError:  
-            raise Exception(f"There is an incorrect dependecy in the map {map}, make sure the objects names are correct.")
+            raise DependencyError(map)
 
         # Add nodes with in-degree 0 to the queue
         queue = deque([node for node in in_degree if in_degree[node] == 0])
