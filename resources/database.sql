@@ -1,7 +1,7 @@
-{% if action == 'DROP' %}
+{% if action.upper() == 'DROP' %}
 {{action}} DATABASE {{name}}; 
 
-{% elif action == 'CREATE' %}
+{% elif action.upper() == 'CREATE' %}
 {{action}} {% if transient %} TRANSIENT {% endif %} DATABASE {{name}} 
 {% if data_retention_time_in_days %} DATA_RETENTION_TIME_IN_DAYS = {{data_retention_time_in_days}} {% endif %}
 {% if max_data_extension_time_in_days %} MAX_DATA_EXTENSION_TIME_IN_DAYS = {{max_data_extension_time_in_days}} {% endif %}
@@ -18,7 +18,7 @@ COMMENT = '{
         "storage_serialization_policy":"{{ storage_serialization_policy }}"
     }';
 
-{% elif action == 'ALTER' %}
+{% elif action.upper() == 'ALTER' %}
 {% if new_name %}
 {{action}} DATABASE {{old_name}} RENAME TO {{new_name}} 
 {% else %}

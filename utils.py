@@ -221,7 +221,7 @@ class Utils:
         }
     
 
-    def snowflake_state(self, session, object, object_id_tag) -> dict:
+    def snowflake_state(self, cursor, object, object_id_tag) -> dict:
         
         # TODO: replace underscores with spaces of the objects
 
