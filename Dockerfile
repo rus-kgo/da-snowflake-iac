@@ -15,5 +15,5 @@ WORKDIR /github/workspace
 
 COPY . /github/workspace
 
-CMD ["python", "/main.py"]
-CMD ["/bin/sh", "-c", "ls -R  && python /main.py"]
+# CMD ["python", "/main.py"]
+CMD ["/bin/sh", "-c", "ls -R  /github/workspace && python /github/workspace/main.py"]
