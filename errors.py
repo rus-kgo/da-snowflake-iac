@@ -61,3 +61,28 @@ class DependencyError(Exception):
         """Take the dependency map as a variable and format it for readability."""
         formatted_map = json.dumps(map, indent=4)
         super().__init__(f"There is an incorrect dependency in the map:\n{formatted_map}\nMake sure the objects names are correct.")
+
+class SnowflakeConnectionError(Exception):
+    """Raised when there is an issue establishing a Snowflake connection or cursor."""
+
+    def __init__(self, error, conn_params=None):
+        """Define the error message.
+        
+        Args:
+            error (Exception): The original exception raised by the Snowflake connector.
+            conn_params (dict, optional): Connection parameters (excluding sensitive data like private keys).
+            
+        """
+        sanitized_params = {
+            key: value
+            for key, value in (conn_params or {}).items()
+            if key not in ("private_key", "private_key_pwd")
+        }
+        
+        message = (
+            f"An error occurred while trying to establish a connection or create a cursor in Snowflake.\n"
+            f"Connection parameters: {sanitized_params}\n"
+            f"Original error: {error}"
+        )
+        
+        super().__init__(message)

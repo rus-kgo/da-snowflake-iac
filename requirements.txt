@@ -1,0 +1,8 @@
+pyyaml
+json
+os
+re
+snowflake-connector-python
+uuid
+collections
+jinja2 

@@ -1,0 +1,28 @@
+name: 'Snowflake IaC'
+author: 'Ruslan Gonzalez Konstantinov'
+description: 'Deploy to Snowflake IaC'
+inputs:
+  run-mode:
+    description: 'Run mode determines which actions can be performed. Valid options: `create-or-update` (never drops resources), `sync` (full resource control).'
+    required: true
+    default: 'create-or-update'
+  defintions-path:
+    description: 'Definitions path should point to the file or folder in the repo that contains the resource configuration.'
+    required: true
+    default: '.'
+  vars:
+    description: >-
+      Dynamic values, specified as a JSON dictionary
+      (e.g. vars: '{"var_name": "var_value"}').
+    required: false
+    default: None
+  dry-run:
+    description: 'When dry run is true, Titan will not make any changes to Snowflake.'
+    required: false
+    default: 'false'
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+branding:
+  icon: 'terminal'
+  color: 'orange'

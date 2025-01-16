@@ -10,7 +10,7 @@ import re
 import snowflake.connector as sc
 
 from utils import Utils
-from errors import DefinitionKeyError, TemplateFileError
+from errors import DefinitionKeyError, TemplateFileError, SnowflakeConnectionError
 
 RESET = "\033[0m"
 RED = "\033[31m"
@@ -22,30 +22,31 @@ CYAN = "\033[36m"
 def get_private_key():
     pass
 
-def snowflake_cursor():
-
-    private_key = b'<byites>'
-    private_key_file_pwd = '<password>'
-
-    conn_params = {
-        'account': '<account_identifier>',
-        'user': '<user>',
-        'private_key': private_key,
-        'private_key_pwd':private_key_file_pwd,
-        'warehouse': '<warehouse>',
-        'database': '<database>',
-        'schema': '<schema>'
-    }
-
-    ctx = sc.connect(**conn_params)
-
-    return ctx.cursor()
 
 
 
 def main():
     """Entry point of the program."""
-    sf_cursor="" #snowflake_cursor()
+    try:
+        private_key = b'<byites>'
+        private_key_file_pwd = '<password>'
+
+        conn_params = {
+            'account': '<account_identifier>',
+            'user': '<user>',
+            'private_key': private_key,
+            'private_key_pwd':private_key_file_pwd,
+            'warehouse': '<warehouse>',
+            'database': '<database>',
+            'schema': '<schema>'
+        }
+        # ctx = sc.connect(**conn_params)
+
+        sf_cursor = "" #ctx.cursor()
+
+    except Exception as e:
+        raise SnowflakeConnectionError(error=e, conn_params=conn_params)
+
     definitions_folder = "definitions"
     resources_folder = "resources"
     run_mode = "create-or-alter" # "create-or-alter", "destroy"
@@ -67,7 +68,7 @@ def main():
 
     definitions_path = os.path.join(os.getcwd(), definitions_folder)
 
-    print(f"{CYAN}account: ajwa_dev{RESET}\n")
+    print(f"{CYAN}account: {conn_params['account']}{RESET}\n")
     for i in sorted_map:
         object, object_name = i.split("::")
 
@@ -79,20 +80,20 @@ def main():
         except FileNotFoundError:
             raise DefinitionKeyError(object) 
         
-        for d_state in definition[object]:
-            # This is for benefit of following the sorter order
-            if d_state["name"] == object_name:
+        try:
+            for d_state in definition[object]:
+                # This is for benefit of following the sorter order
+                if d_state["name"] == object_name:
 
-                # Here we are getting the tag to compare it with the snowfalke object instead o using the name
-                object_id_tag = d_state["object_id_tag"]
+                    # Here we are getting the tag to compare it with the snowfalke object instead o using the name
+                    object_id_tag = d_state["object_id_tag"]
 
-                # Making sure the object is correctly named `database role` instead of `database_role`
-                sf_object = re.sub(r"_", " ", object)
+                    # Making sure the object is correctly named `database role` instead of `database_role`
+                    sf_object = re.sub(r"_", " ", object)
 
-                # Run snowflake function to retrieve the object details as dictionary
-                sf_state = utils.snowflake_state(cursor=sf_cursor, object=sf_object, object_id_tag=object_id_tag)
+                    # Run snowflake function to retrieve the object details as dictionary
+                    sf_state = utils.snowflake_state(cursor=sf_cursor, object=sf_object, object_id_tag=object_id_tag)
 
-                try:
                     if run_mode.lower() == "create-or-alter":
                         if sf_state == {}:
                             sql = utils.render_templates(
@@ -156,13 +157,11 @@ def main():
                         if not dry_run:
                             sf_cursor.execute(sql)
 
-                except Exception as e:
-                    raise TemplateFileError(object, folder=resources_folder, error=e)
+        except Exception as e:
+            sf_cursor.close()
+            raise TemplateFileError(object, folder=resources_folder, error=e)
 
+    sf_cursor.close()
 
 if __name__ == "__main__":
     main()
-
-
-
-                

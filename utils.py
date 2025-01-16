@@ -263,7 +263,7 @@ class Utils:
         #     }
 
         output = {
-            "name": "m_db",
+            "name": "my_db",
             "comment": "to be used for aws step functions",
             "object_id_tag": "792c2a9c-2812-39ed-99b4-1c182450260f",
             }

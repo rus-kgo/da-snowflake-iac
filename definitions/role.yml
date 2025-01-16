@@ -1,9 +1,11 @@
 role:
 - name: aws_step_function
+  owner:
   comment: to be used for aws step functions
   depends_on: null
   object_id_tag: 390771ae-33cf-4c2b-ab45-02165824dde7
 - name: rus_kgo
+  owner:
   comment: to be used for aws step functions
   depends_on: null
   object_id_tag: eb26e9ce-7a37-40b4-9335-ecc292e7a13c

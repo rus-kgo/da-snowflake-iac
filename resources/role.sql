@@ -1,3 +1,7 @@
+{% if owner %} 
+USE {{owner}} ROLE; 
+{% endif %}
+
 {% if action.upper() == 'ALTER' %}
 {{ action }} ROLE {% if old_name %} {{ old_name }} {% endif %}
 {% if new_name %} RENAME TO {{ new_name }} {% endif %}
