@@ -11,6 +11,8 @@ COPY requirements.txt /requirements.txt
 
 RUN /root/.local/bin/uv pip install --system --no-cache -r requirements.txt
 
-COPY main.py /main.py
+WORKDIR /app
 
-CMD ["python", "/main.py"]
+COPY . /app
+
+CMD ["python", "/app/main.py"]
