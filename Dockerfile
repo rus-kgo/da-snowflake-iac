@@ -11,9 +11,9 @@ COPY requirements.txt /requirements.txt
 
 RUN /root/.local/bin/uv pip install --system --no-cache -r requirements.txt
 
-WORKDIR /app
+WORKDIR /github/workspace
 
-COPY . /app
+COPY . /github/workspace
 
-# CMD ["python", "/app/main.py"]
+CMD ["python", "/main.py"]
 CMD ["/bin/sh", "-c", "ls -R /app && python /app/main.py"]
