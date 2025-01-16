@@ -15,4 +15,5 @@ WORKDIR /app
 
 COPY . /app
 
-CMD ["python", "/app/main.py"]
+# CMD ["python", "/app/main.py"]
+CMD ["/bin/sh", "-c", "ls -R /app && python /app/main.py"]
