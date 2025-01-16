@@ -1,6 +1,4 @@
 pyyaml
-re
 snowflake-connector-python
 uuid
-collections
 jinja2 
