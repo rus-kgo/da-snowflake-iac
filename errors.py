@@ -7,15 +7,14 @@ This module provides:
 """
 
 import json
-import os
 
 class FilePathError(Exception):
     """File path error class."""
 
-    def __init__(self, *args, cwd):
+    def __init__(self, *args):
         """Combine all invalid paths into a single string."""
         paths = "', '".join(args) 
-        super().__init__(f"One of the file paths: '{paths}' - is not valid for the current working directory: '{cwd}' and {os.listdir(cwd)}.")
+        super().__init__(f"One of the file paths: '{paths}' - is not valid.")
         
 class TemplateFileError(Exception):
     """Raised when there is an issue with the resources template file."""

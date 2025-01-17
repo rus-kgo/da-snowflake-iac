@@ -47,8 +47,8 @@ def main():
     except Exception as e:
         raise SnowflakeConnectionError(error=e, conn_params=conn_params)
 
-    definitions_folder = "snowflake-iac/definitions"
-    resources_folder = "snowflake-iac/resources"
+    definitions_folder = "/definitions"
+    resources_folder = "/resources"
     run_mode = "create-or-alter" # "create-or-alter", "destroy"
     dry_run = True
 

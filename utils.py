@@ -35,10 +35,10 @@ class Utils:
 
         try:
             self.resources_env = Environment(loader=FileSystemLoader(f"{resources_folder}"))
-            self.definitions_path = f"{definitions_folder}"
+            self.definitions_path = definitions_folder
             self.definitions_files = os.listdir(self.definitions_path)
         except Exception:
-            raise FilePathError(definitions_folder, resources_folder, cwd=self.cwd)
+            raise FilePathError(definitions_folder, resources_folder)
 
 
     def assign_pipeline_tag_id(self) -> None:
