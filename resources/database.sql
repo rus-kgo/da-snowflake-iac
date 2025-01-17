@@ -1,4 +1,4 @@
-{% if owner %} 
+{%- if owner -%} 
 USE {{owner}} ROLE; 
 {% endif %}
 
