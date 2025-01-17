@@ -32,7 +32,7 @@ def main():
         private_key_file_pwd = '<password>'
 
         conn_params = {
-            'account': '<account_identifier>',
+            'account': os.environ['SNOWFLAKE_ACCOUNT'],
             'user': '<user>',
             'private_key': private_key,
             'private_key_pwd':private_key_file_pwd,
