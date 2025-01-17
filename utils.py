@@ -32,11 +32,10 @@ class Utils:
         """
         # TODO: make sure the file paths work for workflows
 
-        self.cwd = "snowflake-iac"
 
         try:
-            self.resources_env = Environment(loader=FileSystemLoader(f"{self.cwd}/{resources_folder}"))
-            self.definitions_path = f"{self.cwd}/{definitions_folder}"
+            self.resources_env = Environment(loader=FileSystemLoader(f"{resources_folder}"))
+            self.definitions_path = f"{definitions_folder}"
             self.definitions_files = os.listdir(self.definitions_path)
         except Exception:
             raise FilePathError(definitions_folder, resources_folder, cwd=self.cwd)
