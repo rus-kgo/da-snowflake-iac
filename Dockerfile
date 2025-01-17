@@ -16,4 +16,4 @@ WORKDIR /snowflake-iac
 COPY . /snowflake-iac
 
 # CMD ["python", "/main.py"]
-CMD ["/bin/sh", "-c", "ls -R  /snowflake-iac && python /snowflake-iac/main.py"]
+CMD ["python", "/snowflake-iac/main.py"]
