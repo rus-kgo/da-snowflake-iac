@@ -11,7 +11,7 @@ COPY requirements.txt /requirements.txt
 
 RUN /root/.local/bin/uv pip install --system --no-cache -r requirements.txt
 
-WORKDIR /github/workspace
+WORKDIR /snowflake-iac
 
 COPY . /snowflake-iac
 
