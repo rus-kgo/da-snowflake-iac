@@ -32,7 +32,7 @@ class Utils:
         """
         # TODO: make sure the file paths work for workflows
 
-        self.cwd = os.getcwd()
+        self.cwd = "snowflake-iac"
 
         try:
             self.resources_env = Environment(loader=FileSystemLoader(f"{self.cwd}/{resources_folder}"))
