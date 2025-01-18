@@ -71,8 +71,8 @@ def main():
     # definitions_folder = "/github/workspace/definitions"
     resources_folder = "/snowflake-iac/resources"
 
-    definitions_path = os.path.join(workspace, definitions_path)
-    print(f"this is debug string {workspace}")
+    definitions_path = f"{workspace}{definitions_path}"
+    print(f"this is debug string {definitions_path}")
 
     utils = Utils(
         aws_access_key_id = aws_access_key_id,
