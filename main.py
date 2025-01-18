@@ -70,6 +70,7 @@ def main():
     resources_folder = "/snowflake-iac/resources"
 
     definitions_path = os.path.join(os.getcwd(), definitions_path)
+    print(definitions_path)
 
     utils = Utils(
         aws_access_key_id = aws_access_key_id,
