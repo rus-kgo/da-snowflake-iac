@@ -81,9 +81,9 @@ def main():
         snowflake_client_secret=sf_conn_secret_name,
     )
 
-    try:
-        token = utils.get_oauth_access_token()
+    token = utils.get_oauth_access_token()
 
+    try:
         conn_params = {
             "user":user,
             "account":account,
