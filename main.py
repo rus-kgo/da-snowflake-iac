@@ -45,6 +45,8 @@ def to_str(s: str | None) -> str | None:
 def main():
     """Entry point of the pipeline."""
     try:
+        workspace = os.environ["GITHUB_WORKSPACE"]
+
         # Inputs
         definitions_path = os.environ.get("INPUT_DEFINITIONS-PATH")
         dry_run = str_to_bool(os.environ["INPUT_DRY-RUN"])
@@ -69,8 +71,8 @@ def main():
     # definitions_folder = "/github/workspace/definitions"
     resources_folder = "/snowflake-iac/resources"
 
-    definitions_path = os.path.join(os.getcwd(), definitions_path)
-    print(definitions_path)
+    definitions_path = os.path.join(workspace, definitions_path)
+    print(f"this is debug string {definitions_path}")
 
     utils = Utils(
         aws_access_key_id = aws_access_key_id,
