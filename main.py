@@ -72,7 +72,7 @@ def main():
     resources_folder = "/snowflake-iac/resources"
 
     definitions_path = os.path.join(workspace, definitions_path)
-    print(f"this is debug string {definitions_path}")
+    print(f"this is debug string {workspace}")
 
     utils = Utils(
         aws_access_key_id = aws_access_key_id,
