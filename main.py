@@ -68,11 +68,8 @@ def main():
         raise ValueError(f"Missing environment variable: {e}") from e
 
 
-    # definitions_folder = "/github/workspace/definitions"
     resources_folder = "/snowflake-iac/resources"
-
     definitions_path = f"{workspace}{definitions_path}"
-    print(f"this is debug string {definitions_path}")
 
     utils = Utils(
         aws_access_key_id = aws_access_key_id,

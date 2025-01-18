@@ -9,7 +9,7 @@ inputs:
   defintions-path:
     description: 'Definitions path should point to the file or folder in the repo that contains the resource definitions.'
     required: true
-    default: '.'
+    default: '/definitions'
   vars:
     description: >-
       Dynamic values, specified as a JSON dictionary
