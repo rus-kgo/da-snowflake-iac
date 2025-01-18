@@ -20,8 +20,8 @@ inputs:
     description: 'When dry run is true, the pipeline will not make any changes to Snowflake.'
     required: false
     default: 'false'
-   database:
-  description: 'Name of the default database.'
+  database:
+    description: 'Name of the default database.'
     required: false
     default: None
   schema:
