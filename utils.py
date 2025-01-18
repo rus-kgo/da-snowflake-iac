@@ -156,7 +156,7 @@ class Utils:
         return {}
 
 
-    def dependencies_map(self):
+    def dependencies_map(self) -> dict:
         """Create a topographic depencies map of the objects."""
         map = {}
         for file in self.definitions_files:
@@ -201,7 +201,7 @@ class Utils:
 
         return map
 
-    def dependencies_sort(self, map):
+    def dependencies_sort(self, map:dict):
         """Sorts the order in which the objects templates need to execute."""
         # Calculate in-degrees of all nodes
         try:
@@ -240,7 +240,7 @@ class Utils:
         }
     
 
-    def _get_client_credentials(self):
+    def _get_client_credentials(self) -> dict:
         """Get client app credentials from AWS Secret Manager."""
         try:
             sts_client = boto3.client(
@@ -277,7 +277,7 @@ class Utils:
             raise ClientCredentialsError(e)
 
 
-    def get_oauth_access_token(self):
+    def get_oauth_access_token(self) -> str:
         """Get access token for the snowflke connection."""
         credentials = self._get_client_credentials()
         try:
@@ -297,15 +297,12 @@ class Utils:
             "scope": scope,
         }
 
-        response = requests.post(toke_url, data=data)
-
-        response_data = response.json()
-        access_token = response_data.get("access_token")
-
-        if not access_token:
+        try:
+            response = requests.post(toke_url, data=data)
+            response_data = response.json()
+            return response_data.get("access_token")
+        except Exception:
             raise OAuthTokenError(response=response)
-        
-        return access_token
 
 
     def snowflake_state(self, cursor, object, object_id_tag) -> dict:
