@@ -7,6 +7,7 @@ This module provides:
 import yaml 
 import os
 import re
+import json
 import snowflake.connector as sc
 
 from utils import Utils
@@ -19,43 +20,86 @@ YELLOW = "\033[33m"
 CYAN = "\033[36m"
 
 
-def get_private_key():
-    pass
+def str_to_bool(s: str) -> bool:
+    """Convert input string to a boolean."""
+    s = s.lower()
+    if s not in {"true", "false"}:
+        raise ValueError(f"Invalid value for boolean: {s}")
+    return s == "true"
 
+def str_to_json(s: str | None) -> dict | None:
+    """Convert a string it a json dict."""
+    if s is None or s == "" or s == "None":
+        return None
+
+    return json.loads(s)
+
+def to_str(s: str | None) -> str | None:
+    """Make sure it a string, return None empty."""
+    if s is None or s == "None" or s == "":
+        return None
+    return s
 
 
 
 def main():
-    """Entry point of the program."""
+    """Entry point of the pipeline."""
     try:
-        private_key = b'<byites>'
-        private_key_file_pwd = '<password>'
+        # Inputs
+        definitions_path = os.environ.get("INPUT_DEFINITIONS-PATH")
+        dry_run = str_to_bool(os.environ["INPUT_DRY-RUN"])
+        run_mode = os.environ["INPUT_RUN-MODE"]
+        vars = str_to_json(os.environ.get("INPUT_VARS", None))
+        database = to_str(os.environ.get("INPUT_DATABASE", None)) 
+        schema = to_str(os.environ.get("INPUT_SCHEMA", None)) 
+
+        # Environment
+        user = os.environ["SNOWFLAKE_USER"]
+        account = os.environ["SNOWFLAKE_ACCOUNT"]
+        warehouse = os.environ["SNOWFLAKE_WAREHOUSE"]
+        aws_access_key_id = os.environ["AWS_ACCESS_KEY_ID"]
+        aws_secret_access_key = os.environ["AWS_SECRET_ACCESS_KEY"]
+        aws_region_name = os.environ["AWS_REGION"]
+        aws_role_arn = os.environ["AWS_ROLE_ARN"]
+    except KeyError as e:
+        raise ValueError(f"Missing environment variable: {e}") from e
+
+
+    # definitions_folder = "/github/workspace/definitions"
+    resources_folder = "/snowflake-iac/resources"
+
+    definitions_path = os.path.join(os.getcwd(), definitions_path)
+
+    utils = Utils(
+        aws_access_key_id = aws_access_key_id,
+        aws_secret_access_key = aws_secret_access_key,
+        aws_region_name = aws_region_name,
+        aws_role_arn = aws_role_arn,
+        definitions_folder=definitions_path,
+        resources_folder=resources_folder,
+    )
+
+    try:
+        token = utils.get_oauth_access_token()
 
         conn_params = {
-            'account': os.environ['SNOWFLAKE_ACCOUNT'],
-            'user': '<user>',
-            'private_key': private_key,
-            'private_key_pwd':private_key_file_pwd,
-            'warehouse': '<warehouse>',
-            'database': '<database>',
-            'schema': '<schema>'
+            "user":user,
+            "account":account,
+            "authenticator":"oauth",
+            "token":token,
+            "warehouse":warehouse,
+            "database":database,
+            "schema":schema,
         }
-        # ctx = sc.connect(**conn_params)
+
+        ctx = sc.connect(**conn_params)
 
         sf_cursor = "" #ctx.cursor()
 
     except Exception as e:
         raise SnowflakeConnectionError(error=e, conn_params=conn_params)
 
-    definitions_folder = "/github/workspace/definitions"
-    resources_folder = "/snowflake-iac/resources"
-    run_mode = "create-or-alter" # "create-or-alter", "destroy"
-    dry_run = True
 
-    utils = Utils(
-        definitions_folder=definitions_folder,
-        resources_folder=resources_folder,
-    )
 
     # First check if all definitions have their tags, assign a tag if not
     utils.assign_pipeline_tag_id()
@@ -66,8 +110,8 @@ def main():
     # Do topographic sorting of the dependecies
     sorted_map = utils.dependencies_sort(map)["map"]
 
-    definitions_path = os.path.join(os.getcwd(), definitions_folder)
 
+    # Print out the map planning, excecute if not a dry-run.
     print(f"{CYAN}account: {conn_params['account']}{RESET}\n")
     for i in sorted_map:
         object, object_name = i.split("::")

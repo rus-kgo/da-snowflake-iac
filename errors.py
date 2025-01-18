@@ -86,3 +86,42 @@ class SnowflakeConnectionError(Exception):
         )
         
         super().__init__(message)
+
+class ClientCredentialsError(Exception):
+    """Rised when there is an issue getting a secret from AWS."""
+
+    def __init__(self, error:str):
+        """Define error message."""
+        message = (
+            f"An error occurred while trying to get a secret from AWS Secret Manager.\n"
+            f"Original error: {error}"
+        )
+        super().__init__(message)
+
+class OAuthTokenError(Exception):
+    """Custom exception for errors occurring during token request."""
+
+    def __init__(self,response=None, error=None):
+        """Define error mssage.
+
+        Args:
+            response (requests.Response, optional): HTTP response object (if available).
+            error (Exception, optional): Original exception that was caught (if any).
+
+        """
+        super().__init__()
+        self.response = response
+        self.error = error
+        self.status_code = response.status_code if response else None
+        self.content = response.raise_for_status() if response else None
+
+    def __str__(self):
+        """Return a string representation of the message error."""
+        base_message = ("An error occurred while trying to get the access token for Snowflake API.\n")
+        if self.original_exception:
+            base_message += f"Original error: {self.error}"
+        if self.status_code:
+            base_message += f"Status Code: {self.status_code})"
+        if self.content:
+            base_message += f"\nReason: {self.content}"
+        return base_message

@@ -9,10 +9,13 @@ import yaml
 import os
 import re
 import uuid
+import requests
+import boto3
+import json
 from collections import deque
 from jinja2 import Environment, FileSystemLoader
 
-from errors import DefinitionKeyError, DependencyError, FilePathError
+from errors import DefinitionKeyError, DependencyError, FilePathError, ClientCredentialsError, OAuthTokenError
 
 
 
@@ -20,7 +23,16 @@ from errors import DefinitionKeyError, DependencyError, FilePathError
 class Utils:
     """Contains functions designed to generate SQL queries for execution in Snowflake, following the dependency order defined in the YAML files."""
 
-    def __init__(self, resources_folder: str, definitions_folder: str):
+    def __init__(
+            self, 
+            resources_folder: str, 
+            definitions_folder: str, 
+            aws_access_key_id:str, 
+            aws_secret_access_key:str, 
+            aws_region_name:str, 
+            aws_role_arn:str, 
+            snowflake_client_secret:str,
+            ):
         """Load the templates environments and list definitions files.
 
         Args:
@@ -28,15 +40,23 @@ class Utils:
                                   (SQL files with Jinja formatting).
             definitions_folder (str): Path to the folder containing Snowflake resource definitions 
                                     (YAML files).
+            aws_access_key_id (str): AWS account access key id.
+            aws_secret_access_key (str): AWS account access secret key.
+            aws_region_name (str): AWS account region.
+            aws_role_arn (str): AWS role with access to the Secrets Manager.
+            snowflake_client_secret (str): Name of the snowflake client secret stored in AWS Secrets Manager.
 
         """
-        # TODO: make sure the file paths work for workflows
-
-
         try:
             self.resources_env = Environment(loader=FileSystemLoader(f"{resources_folder}"))
             self.definitions_path = definitions_folder
             self.definitions_files = os.listdir(self.definitions_path)
+            self.aws_access_key_id = aws_access_key_id
+            self.aws_secret_access_key = aws_secret_access_key
+            self.aws_region_name = aws_region_name
+            self.aws_role_arn = aws_role_arn
+            self.snowflake_client_secret = snowflake_client_secret
+
         except Exception:
             raise FilePathError(definitions_folder, resources_folder)
 
@@ -219,6 +239,74 @@ class Utils:
             "message":"Dependecies map created",
         }
     
+
+    def _get_client_credentials(self):
+        """Get client app credentials from AWS Secret Manager."""
+        try:
+            sts_client = boto3.client(
+                "sts",
+                aws_access_key_id=self.aws_access_key_id,
+                aws_secret_access_key=self.aws_secret_access_key,
+                region_name=self.aws_region_name,
+                ) 
+
+            # Accume the specific role that has access to the Secret Manager
+            assumed_role_object = sts_client.assume_role(
+                RoleArn=self.aws_role_arn,
+                RoleSessionName="da-snowflake-iac",
+            )
+
+            # Extract temporary credentials from the assumed role
+            credentials = assumed_role_object["Credentials"]
+
+            # Use temporary credentials to create a new boto3 session
+            aws_session = boto3.Session(
+                aws_access_key_id = credentials["AccessKeyId"],
+                aws_secret_access_key = credentials["SecretAccessKey"],
+                aws_session_token = credentials["SessionToken"],
+                region_name = self.aws_region_name,
+            )
+
+            # Create a Secret Manager client
+            secrets_manager = aws_session.client("secretsmanager")
+
+            get_secret_value_response = secrets_manager.get_secret_value(SecretId=self.snowflake_client_secret) 
+
+            return json.loads(get_secret_value_response["SecretString"])
+        except Exception as e:
+            raise ClientCredentialsError(e)
+
+
+    def get_oauth_access_token(self):
+        """Get access token for the snowflke connection."""
+        credentials = self._get_client_credentials()
+        try:
+            client_id = credentials["clientId"]
+            client_secret = credentials["clientSecret"]
+            tenant_id = credentials["tenantId"]
+            toke_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+            scope = credentials["scope"]
+        except KeyError as e:
+            raise ValueError(f"Missing credentials variable: {e}") from e
+
+        # OAuth request data
+        data = {
+            "grant_type": "client_credentials",
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "scope": scope,
+        }
+
+        response = requests.post(toke_url, data=data)
+
+        response_data = response.json()
+        access_token = response_data.get("access_token")
+
+        if not access_token:
+            raise OAuthTokenError(response=response)
+        
+        return access_token
+
 
     def snowflake_state(self, cursor, object, object_id_tag) -> dict:
         

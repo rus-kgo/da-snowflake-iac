@@ -7,7 +7,7 @@ inputs:
     required: true
     default: 'create-or-update'
   defintions-path:
-    description: 'Definitions path should point to the file or folder in the repo that contains the resource configuration.'
+    description: 'Definitions path should point to the file or folder in the repo that contains the resource definitions.'
     required: true
     default: '.'
   vars:
@@ -17,9 +17,17 @@ inputs:
     required: false
     default: None
   dry-run:
-    description: 'When dry run is true, Titan will not make any changes to Snowflake.'
+    description: 'When dry run is true, the pipeline will not make any changes to Snowflake.'
     required: false
     default: 'false'
+   database:
+  description: 'Name of the default database.'
+    required: false
+    default: None
+  schema:
+    description: 'Name of the default schema.'
+    required: false
+    default: None
 runs:
   using: 'docker'
   image: 'Dockerfile'
