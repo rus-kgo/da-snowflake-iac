@@ -57,6 +57,7 @@ def main():
         user = os.environ["SNOWFLAKE_USER"]
         account = os.environ["SNOWFLAKE_ACCOUNT"]
         warehouse = os.environ["SNOWFLAKE_WAREHOUSE"]
+        sf_conn_secret_name = os.environ["SNOWFLAKE_CONN_SECRET_NAME"]
         aws_access_key_id = os.environ["AWS_ACCESS_KEY_ID"]
         aws_secret_access_key = os.environ["AWS_SECRET_ACCESS_KEY"]
         aws_region_name = os.environ["AWS_REGION"]
@@ -77,6 +78,7 @@ def main():
         aws_role_arn = aws_role_arn,
         definitions_folder=definitions_path,
         resources_folder=resources_folder,
+        snowflake_client_secret=sf_conn_secret_name,
     )
 
     try:
