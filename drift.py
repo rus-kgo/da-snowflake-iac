@@ -22,8 +22,6 @@ class ObjectDriftCheck:
         :param conn: Dictionary of Snowflake connection parameters.
         """
         self.conn = conn
-        self.show_output = None
-        self.desc_output = None
 
     def _flatten_value(self, value):
         if isinstance(value, list):
