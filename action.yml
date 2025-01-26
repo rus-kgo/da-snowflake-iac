@@ -6,7 +6,7 @@ inputs:
     description: 'Run mode determines which actions can be performed. Valid options: `create-or-update` (never drops resources), `sync` (full resource control).'
     required: true
     default: 'create-or-update'
-  defintions-path:
+  definitions-path:
     description: 'Definitions path should point to the file or folder in the repo that contains the resource definitions.'
     required: true
     default: '/definitions'

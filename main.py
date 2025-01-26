@@ -2,6 +2,9 @@
 
 This module provides:
 - main: main function that orchestrates the pipeline;
+- str_to_bool: function for bool input vars;
+- str_to_json: function for json string input vars;
+- to_str: function for string input vars that might be empty or null;
 """
 
 import yaml 
@@ -12,6 +15,7 @@ import snowflake.connector as sc
 
 from utils import Utils
 from errors import DefinitionKeyError, TemplateFileError, SnowflakeConnectionError
+from drift import ObjectDriftCheck
 
 RESET = "\033[0m"
 RED = "\033[31m"
@@ -24,7 +28,7 @@ def str_to_bool(s: str) -> bool:
     """Convert input string to a boolean."""
     s = s.lower()
     if s not in {"true", "false"}:
-        raise ValueError(f"Invalid value for boolean: {s}")
+        raise ValueError(f"Invalid value for boolean: {s}")  # noqa: TRY003
     return s == "true"
 
 def str_to_json(s: str | None) -> dict | None:
@@ -51,7 +55,6 @@ def main():
         definitions_path = os.environ.get("INPUT_DEFINITIONS-PATH")
         dry_run = str_to_bool(os.environ["INPUT_DRY-RUN"])
         run_mode = os.environ["INPUT_RUN-MODE"]
-        vars = str_to_json(os.environ.get("INPUT_VARS", None))
         database = to_str(os.environ.get("INPUT_DATABASE", None)) 
         schema = to_str(os.environ.get("INPUT_SCHEMA", None)) 
 
@@ -65,8 +68,11 @@ def main():
         aws_region_name = os.environ["AWS_REGION"]
         aws_role_arn = os.environ["AWS_ROLE_ARN"]
     except KeyError as e:
-        raise ValueError(f"Missing environment variable: {e}") from e
+        raise ValueError(f"Missing environment variable: {e}") from e  # noqa: TRY003
 
+
+    # Snowflake resources that contain definition in the SHOW command.
+    show_only_objects = ["view","database", "role", "table"]
 
     resources_folder = "/snowflake-iac/resources"
     definitions_path = f"{workspace}{definitions_path}"
@@ -94,13 +100,12 @@ def main():
             "schema":schema,
         }
 
-        ctx = sc.connect(**conn_params)
+        conn = sc.connect(**conn_params)
 
-        sf_cursor = "" #ctx.cursor()
+        cur = conn.cursor()
 
     except Exception as e:
         raise SnowflakeConnectionError(error=e, conn_params=conn_params)
-
 
 
     # First check if all definitions have their tags, assign a tag if not
@@ -112,6 +117,9 @@ def main():
     # Do topographic sorting of the dependecies
     sorted_map = utils.dependencies_sort(map)["map"]
 
+
+    # Initate drift class to compare object states
+    drift = ObjectDriftCheck(conn=conn)
 
     # Print out the map planning, excecute if not a dry-run.
     print(f"{CYAN}account: {conn_params['account']}{RESET}\n")
@@ -125,6 +133,12 @@ def main():
                 definition = yaml.safe_load(f)
         except FileNotFoundError:
             raise DefinitionKeyError(object) 
+
+        # Making sure the object is correctly named `database role` instead of `database_role`
+        sf_object = re.sub(r"_", " ", object)
+
+
+        show_output = drift.query_fetch_to_df(f"show {sf_object}s")
         
         try:
             for d_state in definition[object]:
@@ -134,14 +148,18 @@ def main():
                     # Here we are getting the tag to compare it with the snowfalke object instead o using the name
                     object_id_tag = d_state["object_id_tag"]
 
-                    # Making sure the object is correctly named `database role` instead of `database_role`
-                    sf_object = re.sub(r"_", " ", object)
+                    describe_object = "No" if sf_object in show_only_objects else "Yes"
 
-                    # Run snowflake function to retrieve the object details as dictionary
-                    sf_state = utils.snowflake_state(cursor=sf_cursor, object=sf_object, object_id_tag=object_id_tag)
+                    sf_drift = drift.object_state(
+                        object_id=object_id_tag, 
+                        object_definition=d_state, 
+                        show_output=show_output,
+                        sf_object=sf_object,
+                        describe_object=describe_object,
+                        )
 
                     if run_mode.lower() == "create-or-alter":
-                        if sf_state == {}:
+                        if not sf_drift:
                             sql = utils.render_templates(
                                     template_file=f"{object}.sql",
                                     definition=d_state,
@@ -152,31 +170,31 @@ def main():
                             print(sql)
 
                             if not dry_run:
-                                sf_cursor.execute(sql)
+                                cur.execute(sql)
+
+                        # Do nothing if the states are the same 
+                        elif len(sf_drift) == 0:
+                            continue
 
                         # If the object exists, but the definition has a new name, alter name
-                        elif sf_state["name"] != d_state["name"]:
-
-                            alter_definition = utils.state_comparison(new_state=d_state, old_state=sf_state)
+                        elif sf_drift["name"] != d_state["name"]:
 
                             sql = utils.render_templates(
                                     template_file=f"{object}.sql",
                                     definition=d_state,
                                     action="ALTER",
-                                    new_name=alter_definition["name"],
-                                    old_name=sf_state["name"],
+                                    new_name=d_state["name"],
+                                    old_name=sf_drift["name"],
                                     )
 
                             print(f"\n{YELLOW} ~ Alter {sf_object}{RESET}")
                             print(sql)
 
                             if not dry_run:
-                                sf_cursor.execute(sql)
+                                cur.execute(sql)
 
                         # If the object exists and has the same name, alter the properties of the object
-                        elif sf_state["name"] == d_state["name"]:
-
-                            alter_definition = utils.state_comparison(new_state=d_state, old_state=sf_state)
+                        elif sf_drift["name"] == d_state["name"]:
 
                             sql = utils.render_templates(
                                     template_file=f"{object}.sql",
@@ -188,7 +206,7 @@ def main():
                             print(sql)
 
                             if not dry_run:
-                                sf_cursor.execute(sql)
+                                cur.execute(sql)
 
                     elif run_mode.lower() == "destroy":
                         sql = utils.render_templates(
@@ -201,13 +219,13 @@ def main():
                         print(sql)
 
                         if not dry_run:
-                            sf_cursor.execute(sql)
+                            cur.execute(sql)
 
         except Exception as e:
-            sf_cursor.close()
+            cur.close()
             raise TemplateFileError(object, folder=resources_folder, error=e)
 
-    sf_cursor.close()
+    cur.close()
 
 if __name__ == "__main__":
     main()

@@ -1,1 +1,4 @@
 definitions/
+readme.md
+pyproject.toml
+.ruf_cache/

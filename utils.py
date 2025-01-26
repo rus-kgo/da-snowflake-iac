@@ -1,8 +1,6 @@
-"""Utility functions and classes for the pipeline.
+"""Utility functions.
 
-This module provides:
-- FasterThanLightError: exception when FTL speed is calculated;
-- calculate_speed: calculate speed given distance and time.
+This module provides utility function for the pipeline run.
 """
 
 import yaml
@@ -126,34 +124,6 @@ class Utils:
         return re.sub(r"\n+", "\n", sql)
 
 
-
-    def state_comparison(self, new_state:dict, old_state:dict) -> dict:
-        """Compare the state of the object in Snowflake against the state of the object .
-
-        In the YAML config file and return the definition for altering the object 
-        if there is a difference.
-
-        Args:
-           new_state (dict): The current state of the object from Snowflake.
-           old_state (dict): The desired state of the object from the YAML config.
-
-        Returns:
-            dict: A dictionary containing the differences, formatted for alteration.
-
-        """
-        if new_state != old_state:
-            unique_keys = new_state.keys() | old_state.keys()
-
-            differences = {
-                key: {"new_value": new_state.get(key), "old_value": old_state.get(key)} 
-                for key in unique_keys 
-            }
-
-            return {
-                    key: differences[key]["new_value"]
-                    for key in differences
-                }
-        return {}
 
 
     def dependencies_map(self) -> dict:
@@ -287,7 +257,7 @@ class Utils:
             toke_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
             scope = credentials["scope"]
         except KeyError as e:
-            raise ValueError(f"Missing credentials variable: {e}") from e
+            raise ValueError(f"Missing credentials variable: {e}") from e  # noqa: TRY003
 
         # OAuth request data
         data = {
@@ -303,55 +273,3 @@ class Utils:
             return response_data.get("access_token")
         except Exception:
             raise OAuthTokenError(response=response)
-
-
-    def snowflake_state(self, cursor, object, object_id_tag) -> dict:
-        
-        # TODO: replace underscores with spaces of the objects
-
-        # describe_sql = f"""
-        #    DESC {object} {object_name}
-        # """
-
-        # show_sql : f"""
-        #     SHOW {object}S like {object_name}
-        # """
-
-        # full_description = session.sql(describe_sql)
-
-        # if full_description == "desc output":
-
-        #     return  full_description
-        # else:
-        #     short_description = session.sql(show_sql)
-        #     return short_description
-        # output = {
-        #     'name': 'test_inter', 
-        #     'type': 'external_oauth', 
-        #     'enabled': 'true', 
-        #     'external_oauth_type': 'azure', 
-        #     'external_oauth_issuer': ['http://issuer1', 'issuer2'], 
-        #     'external_oauth_token_user_mapping_claim': ['http://token'], 
-        #     'external_oauth_snowflake_user_mapping_attribute': 3, 
-        #     'external_oauth_jws_keys_url': ['key_url'], 
-        #     'external_oauth_blocked_roles_list': ['blocked'], 
-        #     'external_oauth_allowed_roles_list': ['allowed'],
-        #     'external_oauth_rsa_public_key': 'pubkey', 
-        #     'external_oauth_rsa_public_key_2': 'pubke2', 
-        #     'external_oauth_audience_list': ['audience1', 'audience2'], 
-        #     'external_oauth_any_role_mode': 'true', 
-        #     'external_oauth_scope_delimiter': ',', 
-        #     'external_oauth_scope_mapping_attribute': 'whatever', 
-        #     'comment': None, 
-        #     'tag': 'd191164a-7813-45f2-aba9-400f3bd31397'
-        #     }
-
-        output = {
-            "name": "my_db",
-            "comment": "to be used for aws step functions",
-            "object_id_tag": "792c2a9c-2812-39ed-99b4-1c182450260f",
-            }
-
-        if output["object_id_tag"] == object_id_tag:
-            return output
-        return {}

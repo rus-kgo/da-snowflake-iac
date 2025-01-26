@@ -16,8 +16,7 @@ COMMENT = '{
         "max_data_extension_time_in_days": "{{ max_data_extension_time_in_days }}",
         "default_ddl_collation":"{{ default_ddl_collation }}",
         "log_level":"{{ log_level }}",
-        "trace_level":"{{ trace_level }}",
-        "storage_serialization_policy":"{{ storage_serialization_policy }}"
+        "trace_level":"{{ trace_level }}"
     }';
 
 {% elif action.upper() == 'ALTER' %}

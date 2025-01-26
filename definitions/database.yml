@@ -11,6 +11,7 @@ database:
   depends_on: 
     database_role:
     - my_db_role
+  wait_time:
   object_id_tag: 792c2a9c-2812-39ed-99b4-1c182450260f
 - name:
   transient:
@@ -22,4 +23,5 @@ database:
   log_level:
   comment: null
   depends_on: 
+  wait_time:
   object_id_tag: 
