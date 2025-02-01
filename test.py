@@ -4,7 +4,7 @@ This module loads the enironemnt variables from .env file an runs the project fr
 The .env file should have the following variables.
 
 GITHUB_WORKSPACE = ""
-INPUT_DEFINITIONS-PATH= "definitions"
+INPUT_DEFINITIONS-PATH = "definitions"
 INPUT_RESOURCES-PATH = "resources"
 INPUT_DRY-RUN = "True"
 INPUT_RUN-MODE= "create-or-alter"
