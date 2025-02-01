@@ -1,0 +1,13 @@
+view:
+- name: db.shema.some_view
+  owner: SYSADMIN
+  secure: true
+  volatile: false
+  recursive: false
+  change_tracking: false
+  copy_grants: false
+  comment: ''
+  wait_time: null
+  depends_on:
+  object_id_tag: 5584fd16-b304-3399-85c4-ef63e0902888
+  as_: select * from table

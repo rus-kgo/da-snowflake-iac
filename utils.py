@@ -25,11 +25,11 @@ class Utils:
             self, 
             resources_folder: str, 
             definitions_folder: str, 
-            aws_access_key_id:str, 
-            aws_secret_access_key:str, 
-            aws_region_name:str, 
-            aws_role_arn:str, 
-            snowflake_client_secret:str,
+            aws_access_key_id:str | None = None, 
+            aws_secret_access_key:str | None = None, 
+            aws_region_name:str | None = None, 
+            aws_role_arn:str | None = None, 
+            snowflake_client_secret:str | None = None,
             ):
         """Load the templates environments and list definitions files.
 

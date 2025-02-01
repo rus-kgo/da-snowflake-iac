@@ -11,9 +11,10 @@ table:
   data_retention_time_in_days: 1
   max_data_extension_time_in_days: 5
   change_tracking: false
-  default_ddl_collation: ""
+  default_ddl_collation: ''
   copy_grants: false
   row_access_policy: {}
-  comment:
-  wait_time:
-  object_id_tag:
+  comment: null
+  depends_on:
+  wait_time: null
+  object_id_tag: 5bc9b593-5219-33de-b6f4-2e0a66ab2bb9
