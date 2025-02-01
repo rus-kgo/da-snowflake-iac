@@ -1,0 +1,19 @@
+table:
+- name: db.schema.some_table
+  columns:
+  - name: col1
+    data_type: STRING
+  owner: SYSADMIN
+  constraints: []
+  transient: false
+  cluster_by: []
+  enable_schema_evolution: false
+  data_retention_time_in_days: 1
+  max_data_extension_time_in_days: 5
+  change_tracking: false
+  default_ddl_collation: ""
+  copy_grants: false
+  row_access_policy: {}
+  comment:
+  wait_time:
+  object_id_tag:

@@ -53,6 +53,7 @@ def main():
 
         # Inputs
         definitions_path = os.environ.get("INPUT_DEFINITIONS-PATH")
+        resources_path = os.environ.get("INPUT_RESOURCES-PATH")
         dry_run = str_to_bool(os.environ["INPUT_DRY-RUN"])
         run_mode = os.environ["INPUT_RUN-MODE"]
         database = to_str(os.environ.get("INPUT_DATABASE", None)) 
@@ -74,7 +75,7 @@ def main():
     # Snowflake resources that contain definition in the SHOW command.
     show_only_objects = ["view","database", "role", "table"]
 
-    resources_folder = "/snowflake-iac/resources"
+    resources_folder = resources_path
     definitions_path = f"{workspace}{definitions_path}"
 
     utils = Utils(

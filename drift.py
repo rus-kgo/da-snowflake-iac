@@ -6,10 +6,8 @@ Drift is the term for when the real-world state of your infrastructure differs f
 
 import pandas as pd
 import json
-from typing import TYPE_CHECKING, Literal
-
-if TYPE_CHECKING:
-    from snowflake.connector import SnowflakeConnection  # noqa: TC004
+from typing import Literal
+from snowflake.connector import SnowflakeConnection
 
 
 
