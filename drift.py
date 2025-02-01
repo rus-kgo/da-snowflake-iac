@@ -100,8 +100,8 @@ class ObjectDriftCheck:
 
             # Combine show and desc outputs
             sf_df = pd.concat([df_desc, df_show], ignore_index=True, join="inner").drop_duplicates()
-        
-        df_show = sf_df
+        else: 
+            sf_df = df_show
 
         # Transform the comment json string into a dictionory
         comment = show_output[show_output["comment"].str.contains(object_id)]["comment"].values[0]
