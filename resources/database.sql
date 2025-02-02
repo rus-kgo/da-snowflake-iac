@@ -1,6 +1,6 @@
-{%- if owner -%} 
-USE {{owner}} ROLE; 
-{% endif %}
+{% if owner %} 
+USE ROLE {{owner}}; 
+{%- endif -%}
 
 {% if action.upper() == 'DROP' %}
 {{action}} DATABASE {{name}}; 

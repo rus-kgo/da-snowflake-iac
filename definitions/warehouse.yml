@@ -1,7 +1,7 @@
 warehouse:
 - name: some_warehouse
   owner: SYSADMIN
-  warehouse_type: STANDARD
+  warehouse_type: "STANDARD"
   warehouse_size: XSMALL
   max_cluster_count: 10
   min_cluster_count: 1

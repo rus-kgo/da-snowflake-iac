@@ -1,9 +1,13 @@
 database_role:
 - name: my_db_role
+  database: some_db
+  owner: some_role
   comment: to be used for aws step functions
   depends_on: null
   object_id_tag: c3bbddeb-d1c2-4575-8e11-34d40804889f
 - name: db_rus_kgo_v2
+  database:
+  owner:
   comment: to be used for aws step functions
   depends_on: 
     role:

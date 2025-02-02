@@ -32,12 +32,12 @@ from utils import Utils
 class LocalTest:
     """Local test class to test the resources and full local run."""
 
-    def local_run():
+    def local_run(self):
         """Load environemnt variables from .env file and full run."""
         load_dotenv()
         main()
 
-    def test_resources():
+    def test_resources(self, resources:list):
         """Load resources and definitions and print out the output for testgin."""
         utils = Utils(
             resources_folder="resources",
@@ -55,66 +55,68 @@ class LocalTest:
         sorted_map = utils.dependencies_sort(map)["map"]
         ic(sorted_map)
 
-
         for i in sorted_map:
             object, object_name = i.split("::")
 
-            file_path = os.path.join("definitions", f"{object}.yml")
+            # Filter working on resources
+            if object in resources:
 
-            try:
-                with open(file_path) as f:
-                    definition = yaml.safe_load(f)
-            except FileNotFoundError:
-                raise DefinitionKeyError(object) 
+                file_path = os.path.join("definitions", f"{object}.yml")
 
-            try:
-                for d_state in definition[object]:
-                    if d_state["name"] == object_name:
+                try:
+                    with open(file_path) as f:
+                        definition = yaml.safe_load(f)
+                except FileNotFoundError:
+                    raise DefinitionKeyError(object) 
 
-                        ic("CREATE action")
-                        sql = utils.render_templates(
-                                template_file=f"{object}.sql",
-                                definition=d_state,
-                                action="CREATE",
-                                )
+                try:
+                    for d_state in definition[object]:
+                        if d_state["name"] == object_name:
 
-                        print(sql)
+                            ic("CREATE action")
+                            sql = utils.render_templates(
+                                    template_file=f"{object}.sql",
+                                    definition=d_state,
+                                    action="CREATE",
+                                    )
 
-                        ic("ALTER action where the name of the object differs.")
-                        sql = utils.render_templates(
-                                template_file=f"{object}.sql",
-                                definition=d_state,
-                                action="ALTER",
-                                new_name=d_state["name"],
-                                old_name="old_object_name",
-                                )
+                            print(sql)
 
-                        print(sql)
+                            ic("ALTER action where the name of the object differs.")
+                            sql = utils.render_templates(
+                                    template_file=f"{object}.sql",
+                                    definition=d_state,
+                                    action="ALTER",
+                                    new_name=d_state["name"],
+                                    old_name="old_object_name",
+                                    )
 
-                        ic("ALTER action")
-                        sql = utils.render_templates(
-                                template_file=f"{object}.sql",
-                                definition=d_state,
-                                action="ALTER",
-                                )
+                            print(sql)
 
-                        print(sql)
+                            ic("ALTER action")
+                            sql = utils.render_templates(
+                                    template_file=f"{object}.sql",
+                                    definition=d_state,
+                                    action="ALTER",
+                                    )
 
-                        ic("DROP action")
-                        sql = utils.render_templates(
-                                template_file=f"{object}.sql",
-                                definition=d_state,
-                                action="DROP",
-                                )
+                            print(sql)
 
-                        print(sql)
+                            ic("DROP action")
+                            sql = utils.render_templates(
+                                    template_file=f"{object}.sql",
+                                    definition=d_state,
+                                    action="DROP",
+                                    )
 
+                            print(sql)
 
-            except Exception as e:
-                raise TemplateFileError(object, folder="resources", error=e)
+                except Exception as e:
+                    raise TemplateFileError(object, folder="resources", error=e)
 
 
 
 if __name__ == "__main__":
-    local_test = LocalTest
-    local_test.test_resources()
+    local_test = LocalTest()
+    resources = ["database_role"]
+    local_test.test_resources(resources)

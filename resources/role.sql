@@ -1,6 +1,6 @@
 {% if owner %} 
-USE {{owner}} ROLE; 
-{% endif %}
+USE ROLE {{owner}}; 
+{%- endif -%}
 
 {% if action.upper() == 'ALTER' %}
 {{ action }} ROLE {% if old_name %} {{ old_name }} {% endif %}
