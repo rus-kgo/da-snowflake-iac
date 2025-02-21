@@ -73,7 +73,10 @@ def main():
 
 
     # Snowflake resources that contain definition in the SHOW command.
-    show_only_objects = ["view","database", "role", "table"]
+    show_only_objects = ["view","database", "role"]
+
+    # Snowflake resource with DESCRIBE output as nested field.
+    nested_desc = [{"table":"columns"}, {"dynamic table":"columns"}]
 
     resources_folder = resources_path
     definitions_path = f"{workspace}{definitions_path}"
@@ -151,12 +154,18 @@ def main():
 
                     describe_object = "No" if sf_object in show_only_objects else "Yes"
 
+                    for d in nested_desc:
+                        if sf_object in d:
+                            nested_field = d.get(sf_object, None)
+
+
                     sf_drift = drift.object_state(
                         object_id=object_id_tag, 
                         object_definition=d_state, 
                         show_output=show_output,
                         sf_object=sf_object,
                         describe_object=describe_object,
+                        nested_field=nested_field,
                         )
 
                     if run_mode.lower() == "create-or-alter":
@@ -164,7 +173,7 @@ def main():
                             sql = utils.render_templates(
                                     template_file=f"{object}.sql",
                                     definition=d_state,
-                                    action="CREATE",
+                                    iac_action="CREATE",
                                     )
 
                             print(f"\n{GREEN} + Create {sf_object}{RESET}")
@@ -183,7 +192,7 @@ def main():
                             sql = utils.render_templates(
                                     template_file=f"{object}.sql",
                                     definition=d_state,
-                                    action="ALTER",
+                                    iac_action="ALTER",
                                     new_name=d_state["name"],
                                     old_name=sf_drift["name"],
                                     )
@@ -200,7 +209,7 @@ def main():
                             sql = utils.render_templates(
                                     template_file=f"{object}.sql",
                                     definition=d_state,
-                                    action="ALTER",
+                                    iac_action="ALTER",
                                     )
 
                             print(f"\n{YELLOW} ~ Alter {sf_object}{RESET}")
@@ -213,7 +222,7 @@ def main():
                         sql = utils.render_templates(
                                 template_file=f"{object}.sql",
                                 definition=d_state,
-                                action="DROP",
+                                iac_action="DROP",
                                 )
 
                         print(f"\n{RED} - Drop {sf_object}{RESET}")

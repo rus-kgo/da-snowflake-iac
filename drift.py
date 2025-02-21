@@ -6,7 +6,7 @@ Drift is the term for when the real-world state of your infrastructure differs f
 
 import pandas as pd
 import json
-from typing import Literal
+from typing import Literal, Any
 from snowflake.connector import SnowflakeConnection
 
 
@@ -21,16 +21,46 @@ class ObjectDriftCheck:
         """
         self.conn = conn
 
-    def _flatten_value(self, value):
-        if isinstance(value, list):
-            if len(value) > 1:
-                return f"{tuple(value)}"
-            return value[0]
-        if isinstance(value, dict):
-            return str(value)  
-        if value is None:
-            return "null"
-        return value  
+    def _flatten_nested_dict(self, data:dict[str, Any], nested_field:str|None) -> pd.DataFrame:
+        """Convert a nested dictionary with a specified nested field into a flattened DataFrame.
+
+        :param data: Dictionary containing both regular and nested fields
+        :param nested_field: Name of the field containing nested dictionaries (default: "columns")
+        :return:
+            pandas.DataFrame: Flattened DataFrame with Property and Value columns
+        """
+        # Separate nested field from regular fields
+        regular_items = {k: v for k, v in data.items() if k != nested_field}
+
+        # Handle regular fields
+        regular_rows = []
+        for key, value in regular_items.items():
+            if isinstance(value, list):
+                value = f"{tuple(value)}" if len(value) > 1 else value[0]
+            elif isinstance(value, dict):
+                value = str(value)
+            elif value is None:
+                value = "null"
+            regular_rows.append({
+                "Property": key, 
+                "Value": value,
+                })
+
+        # Handle nested fields
+        nested_rows = []
+        if nested_field and data[nested_field]:
+            first_nested_item = data[nested_field][0]
+            for key in first_nested_item:
+                nested_rows.append({
+                    "Property": f"{nested_field}_{key}",
+                    "Value": first_nested_item[key],
+                })
+        
+        # Combine and create DataFrame
+        return pd.DataFrame(regular_rows + nested_rows)
+
+            
+
 
     def query_fetch_to_df(self, query:str) -> pd.DataFrame:
         """Execute an asynchronous query in Snowflake and fetch results.
@@ -68,6 +98,7 @@ class ObjectDriftCheck:
             object_definition:dict, 
             show_output:pd.DataFrame, 
             sf_object:str,
+            nested_field:str|None,
             describe_object:Literal["Yes","No"] = "Yes",
             ) -> dict:
         """Compare the state of an object in Snowflake with its YAML definition.
@@ -95,9 +126,12 @@ class ObjectDriftCheck:
 
             # Get description of the object
             df_desc = self.query_fetch_to_df(query=query)
+
+            # Prefix describe columns if the object has nested field
+            if nested_field:
+                df_desc.columns = [f"{nested_field}_" + col for col in df_desc.columns]
             # Pivot for combination
             df_desc = df_desc.melt(var_name="Property", value_vars="Value")
-
             # Combine show and desc outputs
             sf_df = pd.concat([df_desc, df_show], ignore_index=True, join="inner").drop_duplicates()
         else: 
@@ -116,10 +150,8 @@ class ObjectDriftCheck:
         # Add new rows to the dataframe
         sf_df = pd.concat([sf_df, comment_rows], ignore_index=True)
 
-        d_df = pd.DataFrame({
-            "Property": list(object_definition.keys()),
-            "Value": [self._flatten_value(value) for value in object_definition.values()],    
-        })
+        # Convert the defintion dict into a df matching the snowflake output
+        d_df = self._flatten_nested_dict(object_definition, nested_field=nested_field)
 
         # Filter out properties specific to the pipeline project
         d_df = d_df[~d_df["Property"].isin(["depends_on", "wait_time"])]
