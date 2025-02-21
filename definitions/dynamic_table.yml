@@ -1,0 +1,23 @@
+dynamic_table:
+- name: example_dynamic_table
+  database: example_database
+  schema: example_schema
+  owner: SYSADMIN
+  suspended: false
+  columns:
+  - name: id
+    type: number
+  - name: content
+    type: string
+  target_lag: 5 MINUTES
+  initialize: ON_CREATE
+  refresh_mode: FULL
+  data_retention_time_in_days: 2
+  max_data_extension_time_in_days: 3
+  warehouse: example_warehouse
+  as_: 'SELECT col1, col2 FROM source_table WHERE condition = true
+
+    '
+  comment: This is a dynamic table comment
+  depends_on: null
+  object_id_tag: 30f2297e-7a9c-3850-88f9-5c6a0d847766
