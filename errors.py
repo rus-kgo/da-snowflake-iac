@@ -47,7 +47,9 @@ class DefinitionKeyError(Exception):
         keys_str = "', '".join(keys)
 
         if file and obj_name:
-            message = f"Invalid or missing keys: '{keys_str} for the object name = '{obj_name}' in the file = '{file}.yml'."
+            message = f"Invalid or missing keys: ['{keys_str}'] for the object name = '{obj_name}' in the file = '{file}.yml'."
+        elif file:
+            message = f"Invalid of missing keys: ['{keys_str}'] in the file = '{file}.yml'."
         else:
             message = (
                 f"One of the definitions yaml files has an invalid or missing keys: '{keys_str}'."

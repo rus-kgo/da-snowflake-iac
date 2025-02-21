@@ -74,18 +74,20 @@ class Utils:
 
                     for i in definition[object]:
                         try:
-                            obj_name = i["name"]
+                            # Check if object has a name and is not empy
+                            if i["name"] is not None:
+                                obj_name = i["name"]
+                            else:
+                                raise DefinitionKeyError("name", file=object)
                         except KeyError:
                             raise DefinitionKeyError("name", file=object)
-                        # Check if object has a name and is not empy
 
-                        if obj_name:
-                            if "object_id_tag" in i:
-                                if not i["object_id_tag"]:
-                                    i["object_id_tag"] = str(uuid.uuid3(uuid.NAMESPACE_DNS, obj_name))
-                                    modified = True
-                            else:
-                                raise DefinitionKeyError("object_id_tag", file=object, obj_name=obj_name)
+                        if "object_id_tag" in i:
+                            if not i["object_id_tag"]:
+                                i["object_id_tag"] = str(uuid.uuid3(uuid.NAMESPACE_DNS, obj_name))
+                                modified = True
+                        else:
+                            raise DefinitionKeyError("object_id_tag", file=object, obj_name=obj_name)
                     
                     # Write back the modified dictionary to the YAML file
                     if modified:
@@ -100,13 +102,13 @@ class Utils:
                             print(f"Updated file: {file}")
 
 
-    def render_templates(self, template_file: str, definition: dict, action: str, new_name: str = None, old_name: str = None) -> str:
+    def render_templates(self, template_file: str, definition: dict, iac_action: str, new_name: str = None, old_name: str = None) -> str:
         """Render the Jinja template based on the provided parameters.
 
         Args:
             template_file (str): The name of the template file to render.
             definition (dict): The dictionary loaded from the definitions YAML file.
-            action (str): The type of execution action to perform in Snowflake (e.g., "create", "alter", or "drop").
+            iac_action (str): The type of execution iac_action to perform in Snowflake (e.g., "create", "alter", or "drop").
             new_name (str, optional): The new name of the Snowflake object, taken from the YAML file definition. 
                                     Used for renaming objects. Defaults to None.
             old_name (str, optional): The current name of the Snowflake object, taken from its state in Snowflake. 
@@ -118,7 +120,7 @@ class Utils:
         """
         template = self.resources_env.get_template(template_file)
 
-        sql = template.render(new_name=new_name, old_name=old_name, action=action,**definition)
+        sql = template.render(new_name=new_name, old_name=old_name, iac_action=iac_action,**definition)
 
         # Removing extra new line from the template output
         return re.sub(r"\n+", "\n", sql)
@@ -167,7 +169,7 @@ class Utils:
                             d_hash = []
                         map[o_hash] = d_hash
                     except KeyError:
-                        raise DefinitionKeyError("depends_on", "name", file=object)
+                        raise DefinitionKeyError("depends_on", obj_name=object, file=object)
 
         return map
 
