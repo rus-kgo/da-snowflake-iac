@@ -21,7 +21,7 @@ Snowflake SQL jinja templates are being rendere with the data from the defintion
 3. An ordered list of objects (based on the dependecies) is created from the map.
 4. Snowflake is being queried (show object/describe object) to the definition of already existing objects
 5. The object'y yaml file state is being checked against the object's state in Snowflake. If there is a difference,  
-   the action would be to alter an ojbect. If the object does not exists in Snowflake it will be created base on the yaml file. 
+   the iac_action would be to alter an ojbect. If the object does not exists in Snowflake it will be created base on the yaml file. 
 
 You can do a dry-run, that would only print out the plan for execution.
 

@@ -3,7 +3,7 @@ author: 'Ruslan Gonzalez Konstantinov'
 description: 'Deploy to Snowflake IaC'
 inputs:
   run-mode:
-    description: 'Run mode determines which actions can be performed. Valid options: `create-or-update` (never drops resources), `sync` (full resource control).'
+    description: 'Run mode determines which iac_actions can be performed. Valid options: `create-or-update` (never drops resources).
     required: true
     default: 'create-or-update'
   definitions-path:
