@@ -78,6 +78,9 @@ def main():
     # Snowflake resource with DESCRIBE output as nested field.
     nested_desc = [{"table":"columns"}, {"dynamic table":"columns"}]
 
+    # Snowflake resources that can be granted or revokeced
+    granting = ["grant"]
+
     resources_folder = resources_path
     definitions_path = f"{workspace}{definitions_path}"
 
@@ -142,98 +145,120 @@ def main():
         sf_object = re.sub(r"_", " ", object)
 
 
-        show_output = drift.query_fetch_to_df(f"show {sf_object}s")
-        
-        try:
-            for d_state in definition[object]:
-                # This is for benefit of following the sorter order
-                if d_state["name"] == object_name:
-
-                    # Here we are getting the tag to compare it with the snowfalke object instead o using the name
-                    object_id_tag = d_state["object_id_tag"]
-
-                    describe_object = "No" if sf_object in show_only_objects else "Yes"
-
-                    for d in nested_desc:
-                        if sf_object in d:
-                            nested_field = d.get(sf_object, None)
-
-
-                    sf_drift = drift.object_state(
-                        object_id=object_id_tag, 
-                        object_definition=d_state, 
-                        show_output=show_output,
-                        sf_object=sf_object,
-                        describe_object=describe_object,
-                        nested_field=nested_field,
-                        )
-
-                    if run_mode.lower() == "create-or-alter":
-                        if not sf_drift:
+        # Granting snowflake objects are not created or dropped
+        if sf_object in granting:
+            try:
+                for d_state in definition[object]:
+                    # This is for benefit of following the sorter order
+                    if d_state["name"] == object_name and run_mode.lower() == "create-or-alter":
                             sql = utils.render_templates(
                                     template_file=f"{object}.sql",
                                     definition=d_state,
-                                    iac_action="CREATE",
+                                    iac_action="GRANT",
+                                    )
+                    if d_state["name"] == object_name and run_mode.lower() == "destroy":
+                            sql = utils.render_templates(
+                                    template_file=f"{object}.sql",
+                                    definition=d_state,
+                                    iac_action="REVOKE",
+                                    )
+            except Exception as e:
+                cur.close()
+                raise TemplateFileError(object, folder=resources_folder, error=e)
+
+        else:
+            show_output = drift.query_fetch_to_df(f"show {sf_object}s")
+            
+            try:
+                for d_state in definition[object]:
+                    # This is for benefit of following the sorter order
+                    if d_state["name"] == object_name:
+
+                        # Here we are getting the tag to compare it with the snowfalke object instead o using the name
+                        object_id_tag = d_state["object_id_tag"]
+
+                        describe_object = "No" if sf_object in show_only_objects else "Yes"
+
+                        for d in nested_desc:
+                            if sf_object in d:
+                                nested_field = d.get(sf_object, None)
+
+
+                        sf_drift = drift.object_state(
+                            object_id=object_id_tag, 
+                            object_definition=d_state, 
+                            show_output=show_output,
+                            sf_object=sf_object,
+                            describe_object=describe_object,
+                            nested_field=nested_field,
+                            )
+
+                        if run_mode.lower() == "create-or-alter":
+                            if not sf_drift:
+                                sql = utils.render_templates(
+                                        template_file=f"{object}.sql",
+                                        definition=d_state,
+                                        iac_action="CREATE",
+                                        )
+
+                                print(f"\n{GREEN} + Create {sf_object}{RESET}")
+                                print(sql)
+
+                                if not dry_run:
+                                    cur.execute(sql)
+
+                            # Do nothing if the states are the same 
+                            elif len(sf_drift) == 0:
+                                continue
+
+                            # If the object exists, but the definition has a new name, alter name
+                            elif sf_drift["name"] != d_state["name"]:
+
+                                sql = utils.render_templates(
+                                        template_file=f"{object}.sql",
+                                        definition=d_state,
+                                        iac_action="ALTER",
+                                        new_name=d_state["name"],
+                                        old_name=sf_drift["name"],
+                                        )
+
+                                print(f"\n{YELLOW} ~ Alter {sf_object}{RESET}")
+                                print(sql)
+
+                                if not dry_run:
+                                    cur.execute(sql)
+
+                            # If the object exists and has the same name, alter the properties of the object
+                            elif sf_drift["name"] == d_state["name"]:
+
+                                sql = utils.render_templates(
+                                        template_file=f"{object}.sql",
+                                        definition=d_state,
+                                        iac_action="ALTER",
+                                        )
+
+                                print(f"\n{YELLOW} ~ Alter {sf_object}{RESET}")
+                                print(sql)
+
+                                if not dry_run:
+                                    cur.execute(sql)
+
+                        elif run_mode.lower() == "destroy":
+                            sql = utils.render_templates(
+                                    template_file=f"{object}.sql",
+                                    definition=d_state,
+                                    iac_action="DROP",
                                     )
 
-                            print(f"\n{GREEN} + Create {sf_object}{RESET}")
+                            print(f"\n{RED} - Drop {sf_object}{RESET}")
                             print(sql)
 
                             if not dry_run:
                                 cur.execute(sql)
 
-                        # Do nothing if the states are the same 
-                        elif len(sf_drift) == 0:
-                            continue
-
-                        # If the object exists, but the definition has a new name, alter name
-                        elif sf_drift["name"] != d_state["name"]:
-
-                            sql = utils.render_templates(
-                                    template_file=f"{object}.sql",
-                                    definition=d_state,
-                                    iac_action="ALTER",
-                                    new_name=d_state["name"],
-                                    old_name=sf_drift["name"],
-                                    )
-
-                            print(f"\n{YELLOW} ~ Alter {sf_object}{RESET}")
-                            print(sql)
-
-                            if not dry_run:
-                                cur.execute(sql)
-
-                        # If the object exists and has the same name, alter the properties of the object
-                        elif sf_drift["name"] == d_state["name"]:
-
-                            sql = utils.render_templates(
-                                    template_file=f"{object}.sql",
-                                    definition=d_state,
-                                    iac_action="ALTER",
-                                    )
-
-                            print(f"\n{YELLOW} ~ Alter {sf_object}{RESET}")
-                            print(sql)
-
-                            if not dry_run:
-                                cur.execute(sql)
-
-                    elif run_mode.lower() == "destroy":
-                        sql = utils.render_templates(
-                                template_file=f"{object}.sql",
-                                definition=d_state,
-                                iac_action="DROP",
-                                )
-
-                        print(f"\n{RED} - Drop {sf_object}{RESET}")
-                        print(sql)
-
-                        if not dry_run:
-                            cur.execute(sql)
-
-        except Exception as e:
-            cur.close()
-            raise TemplateFileError(object, folder=resources_folder, error=e)
+            except Exception as e:
+                cur.close()
+                raise TemplateFileError(object, folder=resources_folder, error=e)
 
     cur.close()
 
