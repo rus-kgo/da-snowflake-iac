@@ -1,0 +1,11 @@
+stage:
+- name: example_stage
+  database: example_database
+  schema: example_schema
+  url:
+  file_format: (FORMAT_NAME = '<fiel_format_name>')
+  storage_integration:
+  owner: SYSADMIN
+  comment: "This is a stage comment"
+  depends_on:
+  object_id_tag: 123e4567-e89b-12d3-a456-426614174001
