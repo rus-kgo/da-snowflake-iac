@@ -80,10 +80,10 @@ class ObjectDriftCheck:
             list_cols = df_cols["name"].to_list()
 
             # Get the query output
-            show_object = cursor.fetchall()
+            query_output = cursor.fetchall()
 
             # Transform the output into a df
-            df = pd.DataFrame(show_object, columns=list_cols)
+            df = pd.DataFrame(query_output, columns=list_cols)
 
         except Exception as e:
             print(f"Error executing query: {query}\n{e}")
@@ -119,7 +119,7 @@ class ObjectDriftCheck:
         object_name= object_name.values[0]
 
         # Pivot to match the yaml definition
-        df_show = show_output[show_output["comment"].str.contains(object_id)].melt(var_name="Property",value_name="Value")
+        df_show = show_output[show_output["comment"].str.contains(object_id)].melt(var_name="property",value_name="property_value")
 
         if describe_object == "Yes":
             query = f"describe {sf_object} like {object_name}"
@@ -130,8 +130,11 @@ class ObjectDriftCheck:
             # Prefix describe columns if the object has nested field
             if nested_field:
                 df_desc.columns = [f"{nested_field}_" + col for col in df_desc.columns]
-            # Pivot for combination
-            df_desc = df_desc.melt(var_name="Property", value_vars="Value")
+                # Pivot for combination
+                df_desc = df_desc.melt(var_name="property", value_vars="property_value")
+
+            # Select Only necessary Columns
+            df_desc = df_desc[["property", "property_value"]]
             # Combine show and desc outputs
             sf_df = pd.concat([df_desc, df_show], ignore_index=True, join="inner").drop_duplicates()
         else: 
@@ -142,10 +145,10 @@ class ObjectDriftCheck:
         comment = json.loads(comment)
 
         # Create new rows from the fields in the comments json string
-        comment_rows = pd.DataFrame(comment.items(), columns=["Property", "Value"])
+        comment_rows = pd.DataFrame(comment.items(), columns=["property", "property_value"])
 
         # Filter out the comments json string containing a dict as we will add it to df separetely as new rows
-        sf_df = sf_df[sf_df["Property"] != "comment"]
+        sf_df = sf_df[sf_df["property"] != "comment"]
 
         # Add new rows to the dataframe
         sf_df = pd.concat([sf_df, comment_rows], ignore_index=True)
@@ -154,11 +157,11 @@ class ObjectDriftCheck:
         d_df = self._flatten_nested_dict(object_definition, nested_field=nested_field)
 
         # Filter out properties specific to the pipeline project
-        d_df = d_df[~d_df["Property"].isin(["depends_on", "wait_time"])]
+        d_df = d_df[~d_df["property"].isin(["depends_on", "wait_time"])]
 
         # Set index to Properties
-        sf_df = sf_df.set_index("Property")
-        d_df = d_df.set_index("Property")
+        sf_df = sf_df.set_index("property")
+        d_df = d_df.set_index("property")
 
         # Set all string values to lower case before comparison as it is case sensetive
         sf_df = sf_df.map(lambda x : x.lower() if isinstance(x, str) else x)
@@ -171,6 +174,6 @@ class ObjectDriftCheck:
         comparison = d_df.compare(sf_df, keep_shape=False, keep_equal=False, result_names=("new","old"))
 
         try:
-            return comparison["Value"]["old"].to_dict()
+            return comparison["property_value"]["old"].to_dict()
         except KeyError:
             return comparison.to_dict()
