@@ -81,6 +81,9 @@ def main():
     # Snowflake resources that can be granted or revokeced
     granting = ["grant"]
 
+    # Snowflake resources with create or replaces option only, no alter.
+    create_or_replace = ["procedure"]
+
     resources_folder = resources_path
     definitions_path = f"{workspace}{definitions_path}"
 
@@ -165,6 +168,28 @@ def main():
             except Exception as e:
                 cur.close()
                 raise TemplateFileError(object, folder=resources_folder, error=e)
+        
+        # Create or replace objects only, because I am lazy and Alter is not worth it.
+        elif sf_object in create_or_replace:
+            try:
+                for d_state in definition[object]:
+                    # This is for benefit of following the sorter order
+                    if d_state["name"] == object_name and run_mode.lower() == "create-or-alter":
+                            sql = utils.render_templates(
+                                    template_file=f"{object}.sql",
+                                    definition=d_state,
+                                    iac_action="CREATE OR REPLACE",
+                                    )
+                    if d_state["name"] == object_name and run_mode.lower() == "destroy":
+                            sql = utils.render_templates(
+                                    template_file=f"{object}.sql",
+                                    definition=d_state,
+                                    iac_action="DROP",
+                                    )
+            except Exception as e:
+                cur.close()
+                raise TemplateFileError(object, folder=resources_folder, error=e)
+
 
         else:
             show_output = drift.query_fetch_to_df(f"show {sf_object}s")
