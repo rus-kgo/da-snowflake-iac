@@ -73,40 +73,67 @@ class LocalTest:
                     for d_state in definition[object]:
                         if d_state["name"] == object_name:
 
-                            ic("CREATE action")
+                            ic("CREATE OR REPLACE iac_action")
                             sql = utils.render_templates(
                                     template_file=f"{object}.sql",
                                     definition=d_state,
-                                    action="CREATE",
+                                    iac_action="CREATE OR REPLACE",
                                     )
 
                             print(sql)
 
-                            ic("ALTER action where the name of the object differs.")
+                            ic("CREATE iac_action")
                             sql = utils.render_templates(
                                     template_file=f"{object}.sql",
                                     definition=d_state,
-                                    action="ALTER",
+                                    iac_action="CREATE",
+                                    )
+
+                            print(sql)
+
+                            ic("ALTER iac_action where the name of the object differs.")
+                            sql = utils.render_templates(
+                                    template_file=f"{object}.sql",
+                                    definition=d_state,
+                                    iac_action="ALTER",
                                     new_name=d_state["name"],
                                     old_name="old_object_name",
                                     )
 
                             print(sql)
 
-                            ic("ALTER action")
+                            ic("ALTER iac_action")
                             sql = utils.render_templates(
                                     template_file=f"{object}.sql",
                                     definition=d_state,
-                                    action="ALTER",
+                                    iac_action="ALTER",
                                     )
 
                             print(sql)
 
-                            ic("DROP action")
+                            ic("DROP iac_action")
                             sql = utils.render_templates(
                                     template_file=f"{object}.sql",
                                     definition=d_state,
-                                    action="DROP",
+                                    iac_action="DROP",
+                                    )
+
+                            print(sql)
+
+                            ic("GRANT iac_action")
+                            sql = utils.render_templates(
+                                    template_file=f"{object}.sql",
+                                    definition=d_state,
+                                    iac_action="GRANT",
+                                    )
+
+                            print(sql)
+
+                            ic("REVOKE iac_action")
+                            sql = utils.render_templates(
+                                    template_file=f"{object}.sql",
+                                    definition=d_state,
+                                    iac_action="REVOKE",
                                     )
 
                             print(sql)
@@ -118,5 +145,5 @@ class LocalTest:
 
 if __name__ == "__main__":
     local_test = LocalTest()
-    resources = ["database_role"]
+    resources = ["procedure"]
     local_test.test_resources(resources)
