@@ -1,0 +1,26 @@
+procedure:
+- name: example_procedure
+  database: example_database
+  schema: example_schema
+  owner: SYSADMIN
+  language: PYTHON
+  returns: STRING
+  execute_as: CALLER
+  arguments:
+  - name: arg1
+    type: STRING
+  - name: arg2
+    type: STRING
+  handler: my_procedure.handler
+  packages:
+  - 'snowflake-snowpark-python'
+  imports:
+  - <stage_path_and_file_name_to_read>
+  - <stage_path_and_file_name_to_read>
+  runtime_version: 3.8
+  comment: "This is a Python procedure comment"
+  object_id_tag: 9876abcd-5432-efgh-ijkl-210mnopqrs
+  depends_on:
+  body: |
+    def handler(arg1):
+        return f"Hello, {arg1}"
