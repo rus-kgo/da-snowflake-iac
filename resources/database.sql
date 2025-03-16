@@ -2,11 +2,11 @@
 USE ROLE {{owner}}; 
 {%- endif -%}
 
-{% if action.upper() == 'DROP' %}
-{{action}} DATABASE {{name}}; 
+{% if iac_action.upper() == 'DROP' %}
+{{iac_action}} DATABASE {{name}}; 
 
-{% elif action.upper() == 'CREATE' %}
-{{action}} {% if transient %} TRANSIENT {% endif %} DATABASE {{name}} 
+{% elif iac_action.upper() == 'CREATE' %}
+{{iac_action}} {% if transient %} TRANSIENT {% endif %} DATABASE {{name}} 
 {% if data_retention_time_in_days %} DATA_RETENTION_TIME_IN_DAYS = {{data_retention_time_in_days}} {% endif %}
 {% if max_data_extension_time_in_days %} MAX_DATA_EXTENSION_TIME_IN_DAYS = {{max_data_extension_time_in_days}} {% endif %}
 {% if default_ddl_collation %} DEFAULT_DDL_COLLATION = {{default_ddl_collation}} {% endif %}
@@ -19,11 +19,11 @@ COMMENT = '{
         "trace_level":"{{ trace_level }}"
     }';
 
-{% elif action.upper() == 'ALTER' %}
+{% elif iac_action.upper() == 'ALTER' %}
 {% if new_name %}
-{{action}} DATABASE {{old_name}} RENAME TO {{new_name}} 
+{{iac_action}} DATABASE {{old_name}} RENAME TO {{new_name}} 
 {% else %}
-{{action}} DATABASE {{name}} SET
+{{iac_action}} DATABASE {{name}} SET
 {% if data_retention_time_in_days %} DATA_RETENTION_TIME_IN_DAYS = {{data_retention_time_in_days}} {% endif %}
 {% if max_data_extension_time_in_days %} MAX_DATA_EXTENSION_TIME_IN_DAYS = {{max_data_extension_time_in_days}} {% endif %}
 {% if default_ddl_collation %} DEFAULT_DDL_COLLATION = {{default_ddl_collation}} {% endif %}

@@ -8,8 +8,8 @@ USE DATABASE {{ database }};
 USE SCHEMA {{ schema }}; 
 {%- endif -%}
 
-{% if iac_action.upper() == 'CREATE OR REPLACE' %}
-CREATE OR REPLACE PROCEDURE {{ name }}(
+{% if iac_action.upper() == 'CREATE OR ALTER' %}
+CREATE OR ALTER PROCEDURE {{ name }}(
 {%if arguments[0].name %}
 {% for a in arguments %}
     {{a.name}} {{a.type}}{% if not loop.last %}, {% endif %}

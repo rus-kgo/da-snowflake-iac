@@ -1,8 +1,8 @@
-{% if action.upper() == 'DROP' %}
-{{ action }} SECURITY INTEGRATION {{ name }};
+{% if iac_action.upper() == 'DROP' %}
+{{ iac_action }} SECURITY INTEGRATION {{ name }};
 {% else %}
-{{ action }} SECURITY INTEGRATION {{ name }}
-{% if action.upper() == 'ALTER' -%} 
+{{ iac_action }} SECURITY INTEGRATION {{ name }}
+{% if iac_action.upper() == 'ALTER' -%} 
 SET 
 {% endif -%}
 TYPE = EXTERNAL_OAUTH

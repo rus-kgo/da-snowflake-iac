@@ -1,8 +1,5 @@
 event_table:
   - name: some_event_table
-    cluster_by:
-      - timestamp
-      - user_id
     data_retention_time_in_days: 365
     max_data_extension_time_in_days: 30
     change_tracking: true
