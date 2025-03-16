@@ -1,0 +1,16 @@
+schema:
+- name: example_schema
+  database: example_database
+  owner: SYSADMIN
+  transient: true
+  data_retention_time_in_days: <integer> 
+  max_data_extension_time_in_days: <integer> 
+  with_managed_access: true
+  replace_invalid_characters: true
+  default_ddl_collation: '<collation_specification>'
+  log_level: '<log_level>'
+  trace_level: '<trace_level>'
+  comment: "This is a schema comment"
+  wait_time: null
+  depends_on:
+  object_id_tag: 123e4567-e89b-12d3-a456-426614174000
