@@ -81,8 +81,9 @@ def main():
     # Snowflake resources that can be granted or revokeced
     granting = ["grant"]
 
-    # Snowflake resources with create or replaces option only, no alter.
-    create_or_replace = ["procedure"]
+    # Object with create or alter new feature in preview that combines create and alter in on DDL
+    # https://docs.snowflake.com/en/sql-reference/sql/create-or-alter
+    create_or_alter = ["procedure", "column", "schema", "task"]
 
     resources_folder = resources_path
     definitions_path = f"{workspace}{definitions_path}"
@@ -169,8 +170,9 @@ def main():
                 cur.close()
                 raise TemplateFileError(object, folder=resources_folder, error=e)
         
-        # Create or replace objects only, because I am lazy and Alter is not worth it.
-        elif sf_object in create_or_replace:
+        # Create or alter new feature in preview that combines create and alter in on DDL
+        # https://docs.snowflake.com/en/sql-reference/sql/create-or-alter
+        elif sf_object in create_or_alter:
             try:
                 for d_state in definition[object]:
                     # This is for benefit of following the sorter order
@@ -178,7 +180,7 @@ def main():
                             sql = utils.render_templates(
                                     template_file=f"{object}.sql",
                                     definition=d_state,
-                                    iac_action="CREATE OR REPLACE",
+                                    iac_action="CREATE OR ALTER",
                                     )
                     if d_state["name"] == object_name and run_mode.lower() == "destroy":
                             sql = utils.render_templates(

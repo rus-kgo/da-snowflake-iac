@@ -73,11 +73,11 @@ class LocalTest:
                     for d_state in definition[object]:
                         if d_state["name"] == object_name:
 
-                            ic("CREATE OR REPLACE iac_action")
+                            ic("CREATE OR ALTER iac_action")
                             sql = utils.render_templates(
                                     template_file=f"{object}.sql",
                                     definition=d_state,
-                                    iac_action="CREATE OR REPLACE",
+                                    iac_action="CREATE OR ALTER",
                                     )
 
                             print(sql)
@@ -145,5 +145,5 @@ class LocalTest:
 
 if __name__ == "__main__":
     local_test = LocalTest()
-    resources = ["procedure"]
+    resources = ["schema"]
     local_test.test_resources(resources)
