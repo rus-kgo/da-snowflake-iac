@@ -14,12 +14,6 @@ inputs:
     description: 'Do not use unless using your own resources. Resources path should point to the file or folder in the repo that contains the resource sql templates.'
     required: true
     default: '/snowflake-iac/resources'
-  vars:
-    description: >-
-      Dynamic values, specified as a JSON dictionary
-      (e.g. vars: '{"var_name": "var_value"}').
-    required: false
-    default: None
   dry-run:
     description: 'When dry run is true, the pipeline will not make any changes to Snowflake.'
     required: false
@@ -32,6 +26,11 @@ inputs:
     description: 'Name of the default schema.'
     required: false
     default: None
+  warehouse-size:
+    description: 'Re-size the warehouse if needed. Valid Values: XSMALL, SMALL, MEDIUM, LARGE, XLARGE, XXLARGE, XXXLARGE, X4LARGE, X5LARGE, X6LARGE
+    required: false
+    type: string
+    default: XSMALL
 runs:
   using: 'docker'
   image: 'Dockerfile'
