@@ -20,6 +20,7 @@ from drift import ObjectDriftCheck
 RESET = "\033[0m"
 RED = "\033[31m"
 GREEN = "\033[32m"
+BRIGHT_GREEN = "\033[92m"
 YELLOW = "\033[33m"
 CYAN = "\033[36m"
 
@@ -58,6 +59,7 @@ def main():
         run_mode = os.environ["INPUT_RUN-MODE"]
         database = to_str(os.environ.get("INPUT_DATABASE", None)) 
         schema = to_str(os.environ.get("INPUT_SCHEMA", None)) 
+        warehouse_size = to_str(os.environ.get("INPUT_WAREHOUSE-SIZE", None)) 
 
         # Environment
         user = os.environ["SNOWFLAKE_USER"]
@@ -76,14 +78,14 @@ def main():
     show_only_objects = ["view","database", "role"]
 
     # Snowflake resource with DESCRIBE output as nested field.
-    nested_desc = [{"table":"columns"}, {"dynamic table":"columns"}]
+    nested_desc = [{"dynamic table":"columns"}]
 
     # Snowflake resources that can be granted or revokeced
     granting = ["grant"]
 
     # Object with create or alter new feature in preview that combines create and alter in on DDL
     # https://docs.snowflake.com/en/sql-reference/sql/create-or-alter
-    create_or_alter = ["procedure", "column", "schema", "task"]
+    create_or_alter = ["views","table","procedure", "column","schema","task"]
 
     resources_folder = resources_path
     definitions_path = f"{workspace}{definitions_path}"
@@ -113,7 +115,14 @@ def main():
 
         conn = sc.connect(**conn_params)
 
-        cur = conn.cursor()
+        if warehouse_size:
+            cur = conn.cursor()
+            # The the current warehouse size to set it back to default at the and of the run.
+            cur.execute(f"SHOW PARAMETERS LIKE 'warehouse_size' IN WAREHOUSE {warehouse};")
+            current_warehouse_size = cur.fetchone()[1]
+
+            # Set the warehouse size for the run
+            cur.execute(f"alter warehouse {warehouse} set warehouse_size = {warehouse_size};")
 
     except Exception as e:
         raise SnowflakeConnectionError(error=e, conn_params=conn_params)
@@ -149,7 +158,7 @@ def main():
         sf_object = re.sub(r"_", " ", object)
 
 
-        # Granting snowflake objects are not created or dropped
+        # Granting snowflake objects that are not created or dropped
         if sf_object in granting:
             try:
                 for d_state in definition[object]:
@@ -160,14 +169,26 @@ def main():
                                     definition=d_state,
                                     iac_action="GRANT",
                                     )
+                            print(f"\n{GREEN} + Grant {sf_object}{RESET}")
+                            print(sql)
+
+                            if not dry_run:
+                                utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
+
                     if d_state["name"] == object_name and run_mode.lower() == "destroy":
                             sql = utils.render_templates(
                                     template_file=f"{object}.sql",
                                     definition=d_state,
                                     iac_action="REVOKE",
                                     )
+                            print(f"\n{RED} - Revoke {sf_object}{RESET}")
+                            print(sql)
+
+                            if not dry_run:
+                                utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
             except Exception as e:
-                cur.close()
+                cur.execute(f"alter warehouse {warehouse} set warehouse_size = {current_warehouse_size};")
+                conn.close()
                 raise TemplateFileError(object, folder=resources_folder, error=e)
         
         # Create or alter new feature in preview that combines create and alter in on DDL
@@ -182,14 +203,26 @@ def main():
                                     definition=d_state,
                                     iac_action="CREATE OR ALTER",
                                     )
+                            print(f"\n{BRIGHT_GREEN} +~ Create or Alter {sf_object}{RESET}")
+                            print(sql)
+
+                            if not dry_run:
+                                utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
+
                     if d_state["name"] == object_name and run_mode.lower() == "destroy":
                             sql = utils.render_templates(
                                     template_file=f"{object}.sql",
                                     definition=d_state,
                                     iac_action="DROP",
                                     )
+                            print(f"\n{RED} - Drop {sf_object}{RESET}")
+                            print(sql)
+
+                            if not dry_run:
+                                utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
             except Exception as e:
-                cur.close()
+                cur.execute(f"alter warehouse {warehouse} set warehouse_size = {current_warehouse_size};")
+                conn.close()
                 raise TemplateFileError(object, folder=resources_folder, error=e)
 
 
@@ -232,7 +265,7 @@ def main():
                                 print(sql)
 
                                 if not dry_run:
-                                    cur.execute(sql)
+                                    utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
 
                             # Do nothing if the states are the same 
                             elif len(sf_drift) == 0:
@@ -253,7 +286,7 @@ def main():
                                 print(sql)
 
                                 if not dry_run:
-                                    cur.execute(sql)
+                                    utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
 
                             # If the object exists and has the same name, alter the properties of the object
                             elif sf_drift["name"] == d_state["name"]:
@@ -268,7 +301,7 @@ def main():
                                 print(sql)
 
                                 if not dry_run:
-                                    cur.execute(sql)
+                                    utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
 
                         elif run_mode.lower() == "destroy":
                             sql = utils.render_templates(
@@ -281,13 +314,15 @@ def main():
                             print(sql)
 
                             if not dry_run:
-                                cur.execute(sql)
+                                    utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
 
             except Exception as e:
-                cur.close()
+                cur.execute(f"alter warehouse {warehouse} set warehouse_size = {current_warehouse_size};")
+                conn.close()
                 raise TemplateFileError(object, folder=resources_folder, error=e)
 
-    cur.close()
+    cur.execute(f"alter warehouse {warehouse} set warehouse_size = {current_warehouse_size};")
+    conn.close()
 
 if __name__ == "__main__":
     main()
