@@ -5,5 +5,6 @@ grant:
   on_object_type: TABLE
   to_role: example_role
   with_grant_option: false
+  wait_time:
   depends_on: null
   object_id_tag: 3a9a7054-6e42-3d40-aa22-e4cc3c93be30

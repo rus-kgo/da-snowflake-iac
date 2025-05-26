@@ -1,0 +1,13 @@
+stream:
+- name: example_stream
+  database: example_database
+  schema: example_schema
+  owner: SYSADMIN
+  object_type: TABLE
+  object_name: example_table
+  append_only: false
+  insert_only: false
+  show_initial_rows: true
+  comment: "This is a stream comment"
+  depends_on:
+  object_id_tag: 123e4567-e89b-12d3-a456-426614174002

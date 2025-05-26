@@ -78,7 +78,7 @@ class SnowflakeConnectionError(Exception):
         sanitized_params = {
             key: value
             for key, value in (conn_params or {}).items()
-            if key not in ("private_key", "private_key_pwd")
+            if key not in ("private_key", "private_key_pwd", "token", "id_token", "access_token")
         }
         
         message = (

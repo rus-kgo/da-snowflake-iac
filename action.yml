@@ -3,7 +3,7 @@ author: 'Ruslan Gonzalez Konstantinov'
 description: 'Deploy to Snowflake IaC'
 inputs:
   run-mode:
-    description: 'Run mode determines which iac_actions can be performed. Valid options: `create-or-update` (never drops resources).
+    description: 'Run mode determines which iac_actions can be performed. Valid options: `create-or-update`, `destroy`.
     required: true
     default: 'create-or-update'
   definitions-path:
@@ -27,7 +27,7 @@ inputs:
     required: false
     default: None
   warehouse-size:
-    description: 'Re-size the warehouse if needed. Valid Values: XSMALL, SMALL, MEDIUM, LARGE, XLARGE, XXLARGE, XXXLARGE, X4LARGE, X5LARGE, X6LARGE
+    description: 'Re-size the warehouse if needed. Valid options: XSMALL, SMALL, MEDIUM, LARGE, XLARGE, XXLARGE, XXXLARGE, X4LARGE, X5LARGE, X6LARGE
     required: false
     type: string
     default: XSMALL

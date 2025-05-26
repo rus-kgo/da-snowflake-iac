@@ -1,0 +1,16 @@
+user:
+- name: example_user
+  password: example_password
+  login_name: example_login
+  display_name: 'Example User'
+  email: example_user@example.com
+  disabled: false
+  default_warehouse: example_warehouse
+  default_namespace: example_database.example_schema
+  default_role: example_role
+  must_change_password: false
+  rsa_public_key: 'example_rsa_public_key'
+  rsa_public_key_2: 'example_rsa_public_key_2'
+  comment: "This is an example user"
+  depends_on:
+  object_id_tag: abc12345-def6-7890-ghij-klmnopq98765

@@ -1,6 +1,7 @@
 security_integration:
 - name: test_inter
   type: external_oauth
+  owner:
   enabled: 'true'
   external_oauth_type: azure
   external_oauth_issuer:
@@ -32,6 +33,7 @@ security_integration:
   object_id_tag: d191164a-7813-45f2-aba9-400f3bd31397
 - name: test_inter_2
   type: external_oauth
+  owner:
   enabled: true
   external_oauth_type: azure
   external_oauth_issuer: []

@@ -7,17 +7,16 @@ GITHUB_WORKSPACE = ""
 INPUT_DEFINITIONS-PATH = "definitions"
 INPUT_RESOURCES-PATH = "resources"
 INPUT_DRY-RUN = "True"
-INPUT_RUN-MODE= "create-or-alter"
+INPUT_RUN-MODE= "create-or-update"
 INPUT_DATABASE= "some_database"
 INPUT_SCHEMA= "some_schema"
 SNOWFLAKE_USER= "some_user"
 SNOWFLAKE_ACCOUNT= "some_account"
 SNOWFLAKE_WAREHOUSE= "some_warehouse"
-SNOWFLAKE_CONN_SECRET_NAME= "some_secret_name"
-AWS_ACCESS_KEY_ID= "some_aws_access_key"
-AWS_SECRET_ACCESS_KEY= "some_aws_secret_key"
-AWS_REGION= "some_aws_region"
-AWS_ROLE_ARN= "some_aws_role_arn"
+SNOWFLAKE_APP_CLIENT_ID = ""
+SNOWFLAKE_APP_CLIENT_SECRET = ""
+SNOWFLAKE_APP_TENANT_ID = ""
+SNOWFLAKE_APP_SCOPE = ""
 
 """
 import os
@@ -145,5 +144,5 @@ class LocalTest:
 
 if __name__ == "__main__":
     local_test = LocalTest()
-    resources = ["schema"]
+    resources = ["storage_integration"]
     local_test.test_resources(resources)

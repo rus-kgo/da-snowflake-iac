@@ -1,13 +1,10 @@
-{% if owner %} 
-USE ROLE {{owner}}; 
-{%- endif -%}
-{% if action.upper() == 'DROP' %}
-{{ action }} WAREHOUSE {{ name }};
-{% elif action.upper() == 'ALTER' and new_name %}
-{{ action }} WAREHOUSE {{ old_name }} RENAME TO {{ new_name }};
+{% if iac_action.upper() == 'DROP' %}
+{{ iac_action }} WAREHOUSE {{ name }};
+{% elif iac_action.upper() == 'ALTER' and new_name %}
+{{ iac_action }} WAREHOUSE {{ old_name }} RENAME TO {{ new_name }};
 {% else %}
-{{ action }} WAREHOUSE {{ name }}
-{% if action.upper() == 'ALTER' -%} 
+{{ iac_action }} WAREHOUSE {{ name }}
+{% if iac_action.upper() == 'ALTER' -%} 
 SET 
 {% endif -%}
 {% if warehouse_type %} WAREHOUSE_TYPE = '{{ warehouse_type }}' {% endif %}

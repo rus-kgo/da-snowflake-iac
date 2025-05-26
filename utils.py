@@ -27,11 +27,10 @@ class Utils:
             self, 
             resources_folder: str, 
             definitions_folder: str, 
-            aws_access_key_id:str | None = None, 
-            aws_secret_access_key:str | None = None, 
-            aws_region_name:str | None = None, 
-            aws_role_arn:str | None = None, 
-            snowflake_client_secret:str | None = None,
+            sf_app_client_id: str | None,
+            sf_app_client_secret: str | None,
+            sf_app_tenant_id: str | None,
+            sf_app_scope: str | None,
             ):
         """Load the templates environments and list definitions files.
 
@@ -40,22 +39,20 @@ class Utils:
                                   (SQL files with Jinja formatting).
             definitions_folder (str): Path to the folder containing Snowflake resource definitions 
                                     (YAML files).
-            aws_access_key_id (str): AWS account access key id.
-            aws_secret_access_key (str): AWS account access secret key.
-            aws_region_name (str): AWS account region.
-            aws_role_arn (str): AWS role with access to the Secrets Manager.
-            snowflake_client_secret (str): Name of the snowflake client secret stored in AWS Secrets Manager.
+            sf_app_client_id (str): Azure registered Snowflake app id.
+            sf_app_client_secret (str): Azure registered Snowflake app secret.
+            sf_app_tenant_id (str): Azure registered Snowflake app tenant.
+            sf_app_scope (str): Azure registered Snowflake app scopes: `api://<sf_app_clint_id>/.default`.
 
         """
         try:
             self.resources_env = Environment(loader=FileSystemLoader(f"{resources_folder}"))
             self.definitions_path = definitions_folder
             self.definitions_files = os.listdir(self.definitions_path)
-            self.aws_access_key_id = aws_access_key_id
-            self.aws_secret_access_key = aws_secret_access_key
-            self.aws_region_name = aws_region_name
-            self.aws_role_arn = aws_role_arn
-            self.snowflake_client_secret = snowflake_client_secret
+            self.sf_app_client_id = sf_app_client_id
+            self.sf_app_client_secret = sf_app_client_secret
+            self.sf_app_tenant_id = sf_app_tenant_id
+            self.sf_app_scope = sf_app_scope
 
         except Exception:
             raise FilePathError(definitions_folder, resources_folder)
@@ -214,52 +211,15 @@ class Utils:
         }
     
 
-    def _get_client_credentials(self) -> dict:
-        """Get client app credentials from AWS Secret Manager."""
-        try:
-            sts_client = boto3.client(
-                "sts",
-                aws_access_key_id=self.aws_access_key_id,
-                aws_secret_access_key=self.aws_secret_access_key,
-                region_name=self.aws_region_name,
-                ) 
-
-            # Accume the specific role that has access to the Secret Manager
-            assumed_role_object = sts_client.assume_role(
-                RoleArn=self.aws_role_arn,
-                RoleSessionName="da-snowflake-iac",
-            )
-
-            # Extract temporary credentials from the assumed role
-            credentials = assumed_role_object["Credentials"]
-
-            # Use temporary credentials to create a new boto3 session
-            aws_session = boto3.Session(
-                aws_access_key_id = credentials["AccessKeyId"],
-                aws_secret_access_key = credentials["SecretAccessKey"],
-                aws_session_token = credentials["SessionToken"],
-                region_name = self.aws_region_name,
-            )
-
-            # Create a Secret Manager client
-            secrets_manager = aws_session.client("secretsmanager")
-
-            get_secret_value_response = secrets_manager.get_secret_value(SecretId=self.snowflake_client_secret) 
-
-            return json.loads(get_secret_value_response["SecretString"])
-        except Exception as e:
-            raise ClientCredentialsError(e)
-
 
     def get_oauth_access_token(self) -> str:
         """Get access token for the snowflke connection."""
-        credentials = self._get_client_credentials()
         try:
-            client_id = credentials["clientId"]
-            client_secret = credentials["clientSecret"]
-            tenant_id = credentials["tenantId"]
+            client_id = self.sf_app_client_id
+            client_secret = self.sf_app_client_secret
+            tenant_id = self.sf_app_tenant_id
             toke_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
-            scope = credentials["scope"]
+            scope = [self.sf_app_scope]
         except KeyError as e:
             raise ValueError(f"Missing credentials variable: {e}") from e  # noqa: TRY003
 
@@ -274,7 +234,8 @@ class Utils:
         try:
             response = requests.post(toke_url, data=data)
             response_data = response.json()
-            return response_data.get("access_token")
+            if response.ok:
+                return response_data.get("access_token")
         except Exception:
             raise OAuthTokenError(response=response)
 

@@ -65,11 +65,10 @@ def main():
         user = os.environ["SNOWFLAKE_USER"]
         account = os.environ["SNOWFLAKE_ACCOUNT"]
         warehouse = os.environ["SNOWFLAKE_WAREHOUSE"]
-        sf_conn_secret_name = os.environ["SNOWFLAKE_CONN_SECRET_NAME"]
-        aws_access_key_id = os.environ["AWS_ACCESS_KEY_ID"]
-        aws_secret_access_key = os.environ["AWS_SECRET_ACCESS_KEY"]
-        aws_region_name = os.environ["AWS_REGION"]
-        aws_role_arn = os.environ["AWS_ROLE_ARN"]
+        sf_app_client_id = os.environ["SNOWFLAKE_APP_CLIENT_ID"]
+        sf_app_client_secret = os.environ["SNOWFLAKE_APP_CLIENT_SECRET"]
+        sf_app_tenant_id = os.environ["SNOWFLAKE_APP_TENANT_ID"]
+        sf_app_scope = os.environ["SNOWFLAKE_APP_SCOPE"]
     except KeyError as e:
         raise ValueError(f"Missing environment variable: {e}") from e  # noqa: TRY003
 
@@ -91,15 +90,24 @@ def main():
     definitions_path = f"{workspace}{definitions_path}"
 
     utils = Utils(
-        aws_access_key_id = aws_access_key_id,
-        aws_secret_access_key = aws_secret_access_key,
-        aws_region_name = aws_region_name,
-        aws_role_arn = aws_role_arn,
+        sf_app_client_id = sf_app_client_id,
+        sf_app_client_secret = sf_app_client_secret,
+        sf_app_tenant_id = sf_app_tenant_id,
+        sf_app_scope = sf_app_scope,
         definitions_folder=definitions_path,
         resources_folder=resources_folder,
-        snowflake_client_secret=sf_conn_secret_name,
     )
 
+    # First check if all definitions have their tags, assign a tag if not
+    utils.assign_pipeline_tag_id()
+
+    # Map the dependencies of all the definitions in the yaml files
+    map = utils.dependencies_map()
+
+    # Do topographic sorting of the dependecies
+    sorted_map = utils.dependencies_sort(map)["map"]
+
+    # Get toke for Snowflake connection
     token = utils.get_oauth_access_token()
 
     try:
@@ -117,9 +125,9 @@ def main():
 
         if warehouse_size:
             cur = conn.cursor()
-            # The the current warehouse size to set it back to default at the and of the run.
+            # Get the current warehouse size to set it back to default at the and of the run.
             cur.execute(f"SHOW PARAMETERS LIKE 'warehouse_size' IN WAREHOUSE {warehouse};")
-            current_warehouse_size = cur.fetchone()[1]
+            default_warehouse_size = cur.fetchone()[1]
 
             # Set the warehouse size for the run
             cur.execute(f"alter warehouse {warehouse} set warehouse_size = {warehouse_size};")
@@ -128,14 +136,6 @@ def main():
         raise SnowflakeConnectionError(error=e, conn_params=conn_params)
 
 
-    # First check if all definitions have their tags, assign a tag if not
-    utils.assign_pipeline_tag_id()
-
-    # Map the dependencies of all the definitions in the yaml files
-    map = utils.dependencies_map()
-
-    # Do topographic sorting of the dependecies
-    sorted_map = utils.dependencies_sort(map)["map"]
 
 
     # Initate drift class to compare object states
@@ -163,7 +163,7 @@ def main():
             try:
                 for d_state in definition[object]:
                     # This is for benefit of following the sorter order
-                    if d_state["name"] == object_name and run_mode.lower() == "create-or-alter":
+                    if d_state["name"] == object_name and run_mode.lower() == "create-or-update":
                             sql = utils.render_templates(
                                     template_file=f"{object}.sql",
                                     definition=d_state,
@@ -187,17 +187,18 @@ def main():
                             if not dry_run:
                                 utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
             except Exception as e:
-                cur.execute(f"alter warehouse {warehouse} set warehouse_size = {current_warehouse_size};")
+                if warehouse_size:
+                    cur.execute(f"alter warehouse {warehouse} set warehouse_size = {default_warehouse_size};")
                 conn.close()
                 raise TemplateFileError(object, folder=resources_folder, error=e)
         
-        # Create or alter new feature in preview that combines create and alter in on DDL
+        # Create or alter new feature in preview that combines create and alter in one DDL
         # https://docs.snowflake.com/en/sql-reference/sql/create-or-alter
         elif sf_object in create_or_alter:
             try:
                 for d_state in definition[object]:
                     # This is for benefit of following the sorter order
-                    if d_state["name"] == object_name and run_mode.lower() == "create-or-alter":
+                    if d_state["name"] == object_name and run_mode.lower() == "create-or-update":
                             sql = utils.render_templates(
                                     template_file=f"{object}.sql",
                                     definition=d_state,
@@ -221,7 +222,8 @@ def main():
                             if not dry_run:
                                 utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
             except Exception as e:
-                cur.execute(f"alter warehouse {warehouse} set warehouse_size = {current_warehouse_size};")
+                if warehouse_size:
+                    cur.execute(f"alter warehouse {warehouse} set warehouse_size = {default_warehouse_size};")
                 conn.close()
                 raise TemplateFileError(object, folder=resources_folder, error=e)
 
@@ -240,8 +242,7 @@ def main():
                         describe_object = "No" if sf_object in show_only_objects else "Yes"
 
                         for d in nested_desc:
-                            if sf_object in d:
-                                nested_field = d.get(sf_object, None)
+                            nested_field = d.get(sf_object, None)
 
 
                         sf_drift = drift.object_state(
@@ -253,7 +254,7 @@ def main():
                             nested_field=nested_field,
                             )
 
-                        if run_mode.lower() == "create-or-alter":
+                        if run_mode.lower() == "create-or-update":
                             if not sf_drift:
                                 sql = utils.render_templates(
                                         template_file=f"{object}.sql",
@@ -317,11 +318,13 @@ def main():
                                     utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
 
             except Exception as e:
-                cur.execute(f"alter warehouse {warehouse} set warehouse_size = {current_warehouse_size};")
+                if warehouse_size:
+                    cur.execute(f"alter warehouse {warehouse} set warehouse_size = {default_warehouse_size};")
                 conn.close()
                 raise TemplateFileError(object, folder=resources_folder, error=e)
 
-    cur.execute(f"alter warehouse {warehouse} set warehouse_size = {current_warehouse_size};")
+    if warehouse_size:
+        cur.execute(f"alter warehouse {warehouse} set warehouse_size = {default_warehouse_size};")
     conn.close()
 
 if __name__ == "__main__":

@@ -26,4 +26,3 @@ Snowflake SQL jinja templates are being rendere with the data from the defintion
 You can do a dry-run, that would only print out the plan for execution.
 
 You can use differen roles to create objects, since it will be using an OAuth authentification with ANY ROLE opiton. 
-

@@ -1,7 +1,3 @@
-{% if owner %} 
-USE ROLE {{owner}}; 
-{%- endif -%}
-
 {% if iac_action.upper() == 'DROP' %}
 {{iac_action}} DATABASE {{name}}; 
 

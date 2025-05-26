@@ -1,10 +1,3 @@
-{% if owner %} 
-USE ROLE {{ owner }}; 
-{%- endif -%}
-{% if database %} 
-USE DATABASE {{ database }}; 
-{%- endif -%}
-
 {% if iac_action.upper() == 'CREATE OR ALTER' %}
 CREATE OR ALTER{% if transient %} TRANSIENT{% endif %} SCHEMA {{ name }}
 {% if managed_access %}WITH MANAGED ACCESS {% endif %}

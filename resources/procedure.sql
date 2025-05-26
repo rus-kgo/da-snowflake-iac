@@ -1,13 +1,3 @@
-{% if owner %} 
-USE ROLE {{ owner }}; 
-{%- endif -%}
-{% if database %} 
-USE DATABASE {{ database }}; 
-{%- endif -%}
-{% if schema %} 
-USE SCHEMA {{ schema }}; 
-{%- endif -%}
-
 {% if iac_action.upper() == 'CREATE OR ALTER' %}
 CREATE OR ALTER PROCEDURE {{ name }}(
 {%if arguments[0].name %}

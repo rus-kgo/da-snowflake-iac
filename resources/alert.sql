@@ -1,13 +1,3 @@
-{% if owner %} 
-USE ROLE {{ owner }}; 
-{%- endif -%}
-{% if database %} 
-USE DATABASE {{ database }}; 
-{%- endif -%}
-{% if schema %} 
-USE SCHEMA {{ schema }}; 
-{%- endif -%}
-
 {% if iac_action.upper() == 'CREATE' %}
 {{ iac_action }} ALERT {{ name }}
 {% if schedule %} SCHEDULE = '{{ schedule }}' {% endif %}

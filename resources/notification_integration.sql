@@ -1,7 +1,3 @@
-{% if owner %} 
-USE ROLE {{ owner }}; 
-{%- endif -%}
-
 {% if iac_action.upper() == 'CREATE' %}
 CREATE NOTIFICATION INTEGRATION {{ name }}
 TYPE = EMAIL
