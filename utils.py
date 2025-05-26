@@ -243,13 +243,13 @@ class Utils:
         """Execute rendered template."""
         cur = connection.cursor()
         if definition.get("database"):
-            cur.execute(f"use database {definition.database};")
+            cur.execute(f"use database {definition['database']};")
         if definition.get("schema"):
-            cur.execute(f"use schema {definition.schema};")
+            cur.execute(f"use schema {definition['schema']};")
         if definition.get("owner"):
-            cur.execute(f"use role {definition.owner};")
+            cur.execute(f"use role {definition['owner']};")
         
         cur.execute(sql)
         # Wait after execution if necesary, befor the next one.
         if definition.get("wait_time"):
-            time.sleep(definition.wait_time)
+            time.sleep(definition["wait_time"])
