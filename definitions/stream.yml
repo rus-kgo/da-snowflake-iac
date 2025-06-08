@@ -3,8 +3,8 @@ stream:
   database: example_database
   schema: example_schema
   owner: SYSADMIN
-  object_type: TABLE
-  object_name: example_table
+  object_type: view
+  object_name: example_view
   append_only: false
   insert_only: false
   show_initial_rows: true

@@ -27,10 +27,10 @@ class Utils:
             self, 
             resources_folder: str, 
             definitions_folder: str, 
-            sf_app_client_id: str | None,
-            sf_app_client_secret: str | None,
-            sf_app_tenant_id: str | None,
-            sf_app_scope: str | None,
+            sf_app_client_id: str | None = None,
+            sf_app_client_secret: str | None = None,
+            sf_app_tenant_id: str | None = None,
+            sf_app_scope: str | None = None,
             ):
         """Load the templates environments and list definitions files.
 
@@ -253,3 +253,8 @@ class Utils:
         # Wait after execution if necesary, befor the next one.
         if definition.get("wait_time"):
             time.sleep(definition["wait_time"])
+
+    def load_python_proc(self, file_path:str):
+        """Zip and load python source procedure to internal stage."""
+        #TODO: 
+        pass

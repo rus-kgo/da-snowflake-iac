@@ -63,10 +63,7 @@ class ObjectDriftCheck:
 
 
     def query_fetch_to_df(self, query:str) -> pd.DataFrame:
-        """Execute an asynchronous query in Snowflake and fetch results.
-
-        :return: Query results.
-        """
+        """Execute an asynchronous query in Snowflake and fetch results."""
         if not self.conn:
             raise ConnectionError("No active Snowflake connection.")  # noqa: TRY003
 
@@ -96,7 +93,6 @@ class ObjectDriftCheck:
             self, 
             object_id:str, 
             object_definition:dict, 
-            show_output:pd.DataFrame, 
             sf_object:str,
             nested_field:str|None,
             describe_object:Literal["Yes","No"] = "Yes",
@@ -105,10 +101,11 @@ class ObjectDriftCheck:
 
         :param object_id: Snowflake object_id taken from the yaml definition file.
         :param object_definition: Swnowflake object definition stored in the yaml file.
-        :param show_output: Snowflake output when quering to show objects.
         :param describe_object: For some objects the DESCRIBE output does not include the object definition. Instead, only SHOW is used.
         :return: Comparison result as a dictionary.
         """
+        show_output = self.query_fetch_to_df(f"show {sf_object}s")
+
         # Get the name of the object corresponding to the id
         object_name = show_output[show_output["comment"].str.contains(object_id)]["name"]
 

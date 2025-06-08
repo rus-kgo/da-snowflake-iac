@@ -229,7 +229,6 @@ def main():
 
 
         else:
-            show_output = drift.query_fetch_to_df(f"show {sf_object}s")
             
             try:
                 for d_state in definition[object]:
@@ -248,7 +247,6 @@ def main():
                         sf_drift = drift.object_state(
                             object_id=object_id_tag, 
                             object_definition=d_state, 
-                            show_output=show_output,
                             sf_object=sf_object,
                             describe_object=describe_object,
                             nested_field=nested_field,

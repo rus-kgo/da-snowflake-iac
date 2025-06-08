@@ -144,5 +144,5 @@ class LocalTest:
 
 if __name__ == "__main__":
     local_test = LocalTest()
-    resources = ["storage_integration"]
+    resources = ["stream"]
     local_test.test_resources(resources)
