@@ -3,19 +3,16 @@
 This module provides utility function for the pipeline run.
 """
 
-import yaml
+import tomllib
 import os
 import re
-import uuid
 import requests
-import boto3
-import json
-import time
-from snowflake.connector import SnowflakeConnection
+import sqlparse
+# from snowflake.connector import SnowflakeConnection
 from collections import deque
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, meta, UndefinedError, TemplateSyntaxError
 
-from errors import DefinitionKeyError, DependencyError, FilePathError, ClientCredentialsError, OAuthTokenError
+from errors import DefinitionKeyError, DependencyError, FilePathError, ClientCredentialsError, OAuthTokenError, TemplateFileError
 
 
 
@@ -46,7 +43,7 @@ class Utils:
 
         """
         try:
-            self.resources_env = Environment(loader=FileSystemLoader(f"{resources_folder}"))
+            self.resources_folder = resources_folder
             self.definitions_path = definitions_folder
             self.definitions_files = os.listdir(self.definitions_path)
             self.sf_app_client_id = sf_app_client_id
@@ -58,74 +55,51 @@ class Utils:
             raise FilePathError(definitions_folder, resources_folder)
 
 
-    def assign_pipeline_tag_id(self) -> None:
-        """Go through all the definitions of snowflake objects and checks if they have the `object_id_tag`. It will assign one if there is none."""
-        for file in self.definitions_files:
-            modified = False
-            # Load each definition yaml file as a dictionary
-            file_path = os.path.join(self.definitions_path, file)
-            with open(file_path) as f:
-                definition = yaml.safe_load(f)
 
-                if definition:
-                    # Convert the dictiory key into a string
-                    object = "".join(definition.keys())
-
-                    for i in definition[object]:
-                        try:
-                            # Check if object has a name and is not empy
-                            if i["name"] is not None:
-                                obj_name = i["name"]
-                            else:
-                                raise DefinitionKeyError("name", file=object)
-                        except KeyError:
-                            raise DefinitionKeyError("name", file=object)
-
-                        if "object_id_tag" in i:
-                            if not i["object_id_tag"]:
-                                i["object_id_tag"] = str(uuid.uuid3(uuid.NAMESPACE_DNS, obj_name))
-                                modified = True
-                        else:
-                            raise DefinitionKeyError("object_id_tag", file=object, obj_name=obj_name)
-                    
-                    # Write back the modified dictionary to the YAML file
-                    if modified:
-                        with open(f"{self.definitions_path}/{file}", "w") as f:
-                            yaml.dump(
-                                definition,
-                                f,
-                                default_flow_style=False,
-                                allow_unicode=True,
-                                sort_keys=False,
-                            )
-                            print(f"Updated file: {file}")
-
-
-    def render_templates(self, template_file: str, definition: dict, iac_action: str, new_name: str = None, old_name: str = None) -> str:
-        """Render the Jinja template based on the provided parameters.
+    def render_templates(self, template:str, definition:dict, iac_action:str, obj_name:str = "NA") -> str:
+        """Render the Jinja template of the resource.
 
         Args:
-            template_file (str): The name of the template file to render.
-            definition (dict): The dictionary loaded from the definitions YAML file.
+            template (str): The resouce sql template to render.
+            definition (dict): The definition of the resource.
             iac_action (str): The type of execution iac_action to perform in Snowflake (e.g., "create", "alter", or "drop").
-            new_name (str, optional): The new name of the Snowflake object, taken from the YAML file definition. 
-                                    Used for renaming objects. Defaults to None.
-            old_name (str, optional): The current name of the Snowflake object, taken from its state in Snowflake. 
-                                    Used for renaming objects. Defaults to None.
+            obj_name (str): The name of the resouce object.
 
         Returns:
             str: The rendered SQL template as a string.
 
         """
-        template = self.resources_env.get_template(template_file)
+        try:
+            env = Environment()
+            # Validate that all keys in the template are present in definition
+            parsed_obj_template = env.parse(template)
+            required_vars = meta.find_undeclared_variables(parsed_obj_template)
+            missing_vars = [var for var in required_vars if var not in definition and var != "iac_action"]
+            if missing_vars:
+                raise TemplateFileError(obj_name, self.resources_folder, f"Missing variables: {missing_vars}")
 
-        sql = template.render(new_name=new_name, old_name=old_name, iac_action=iac_action,**definition)
+            # Sanitze definition, removing SQL possible injection characters
+            sanitized_definition = {
+                k: str(v).replace(";", "").replace("--", "") if isinstance(v, str) else v
+                for k, v in definition.items()
+            }
 
-        # Removing extra new line from the template output
-        return re.sub(r"\n+", "\n", sql)
 
+            obj_template = env.from_string(template)
+            sql = obj_template.render(
+                iac_action=iac_action,
+                **sanitized_definition,
+                )
+            # Clean the rendered multiline script from new lines 
+            sql_clean = re.sub(r"\n+", "\n", sql)
+            # Remove leading/trailing whitespaces and ";"
+            sql_clean = sql_clean.strip() 
+            sql_clean = sql_clean.strip(";") 
 
+        except (KeyError, TemplateSyntaxError, UndefinedError) as e:
+            raise TemplateFileError(obj_name, self.resources_folder, e)
 
+        return sqlparse.format(sql_clean, reindent=True, keyword_case="upper")
 
     def dependencies_map(self) -> dict:
         """Create a topographic depencies map of the objects."""
@@ -134,10 +108,11 @@ class Utils:
             # Load each definition yaml file as a dictionary
             file_path = os.path.join(self.definitions_path, file)
             with open(file_path) as f:
-                definition = yaml.safe_load(f)
+                definition = tomllib.load(f)
 
             if definition:
-                # Convert the dictiory key into a string
+                # Get the object name from the definition dictionary
+                # The object name is the key of the dictionary.
                 object = "".join(definition.keys())
 
                 # For each item in the definition create 
@@ -239,20 +214,20 @@ class Utils:
         except Exception:
             raise OAuthTokenError(response=response)
 
-    def execute_rendered_template(self, connection:SnowflakeConnection, definition:dict, sql:str) -> None:
-        """Execute rendered template."""
-        cur = connection.cursor()
-        if definition.get("database"):
-            cur.execute(f"use database {definition['database']};")
-        if definition.get("schema"):
-            cur.execute(f"use schema {definition['schema']};")
-        if definition.get("owner"):
-            cur.execute(f"use role {definition['owner']};")
+    # def execute_rendered_template(self, connection:SnowflakeConnection, definition:dict, sql:str) -> None:
+    #     """Execute rendered template."""
+    #     cur = connection.cursor()
+    #     if definition.get("database"):
+    #         cur.execute(f"use database {definition['database']};")
+    #     if definition.get("schema"):
+    #         cur.execute(f"use schema {definition['schema']};")
+    #     if definition.get("owner"):
+    #         cur.execute(f"use role {definition['owner']};")
         
-        cur.execute(sql)
-        # Wait after execution if necesary, befor the next one.
-        if definition.get("wait_time"):
-            time.sleep(definition["wait_time"])
+    #     cur.execute(sql)
+    #     # Wait after execution if necesary, befor the next one.
+    #     if definition.get("wait_time"):
+    #         time.sleep(definition["wait_time"])
 
     def load_python_proc(self, file_path:str):
         """Zip and load python source procedure to internal stage."""
