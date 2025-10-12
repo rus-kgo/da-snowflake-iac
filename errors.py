@@ -19,12 +19,11 @@ class FilePathError(Exception):
 class TemplateFileError(Exception):
     """Raised when there is an issue with the resources template file."""
 
-    def __init__(self, obj_name: str, folder: str, error: Exception):
+    def __init__(self, obj_name: str, file: str, error: Exception):
         """Initialize the exception with detailed error information.
 
         Args:
             file (str): The name of the template file (without extension).
-            folder (str): The folder where the template is expected.
             error (Exception): The caught Jinja2 exception instance.
             obj_name (str): The name of the resource object.
 
@@ -32,16 +31,16 @@ class TemplateFileError(Exception):
         if hasattr(error, "lineno"): 
             message = (
                 f"Template syntax error of the object named as '{obj_name}' at line {error.lineno} "
-                f"in folder = '{folder}'\n"
+                f"in file = '{file}'\n"
                 f"Jinja2 error: {str(error)}"
             )
         elif hasattr(error, "message"):
             message = (
-                f"Template rendering error of the object named as '{obj_name}' in folder '{folder}': {error.message}"
+                f"Template rendering error of the object named as '{obj_name}' in file '{file}': {error.message}"
             )
         else:
             message = (
-                f"Invalid or missing template for the object named as '{obj_name}' in folder = '{folder}'.\n"
+                f"Invalid or missing template for the object named as '{obj_name}' in file = '{file}'.\n"
                 f"Jinja2 error: {str(error)}"
             )
 

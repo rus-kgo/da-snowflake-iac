@@ -1,6 +1,9 @@
 pyyaml
-snowflake-connector-python
 uuid
 jinja2 
-boto3
 pandas
+sqlalchemy 
+psycopg2-binary 
+snowflake-sqlalchemy 
+cryptography 
+cx_Oracle

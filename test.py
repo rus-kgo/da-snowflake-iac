@@ -44,7 +44,7 @@ class LocalTest:
         )
 
         # First check if all definitions have their tags, assign a tag if not
-        utils.assign_pipeline_tag_id()
+        # utils.assign_pipeline_tag_id()
 
         # Map the dependencies of all the definitions in the yaml files
         map = utils.dependencies_map()
@@ -144,5 +144,5 @@ class LocalTest:
 
 if __name__ == "__main__":
     local_test = LocalTest()
-    resources = ["stream"]
+    resources = ["security_integraion"]
     local_test.test_resources(resources)

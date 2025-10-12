@@ -1,0 +1,23 @@
+name: SQL IaC
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Deploy to Snowflake IaC
+        uses: rus-kgo/da-snowflake-iac@main
+        with:
+          run-mode: 'create-or-update'
+          definitions-path: '/definitions'
+          dry-run: 'true'
+        env:
+          SNOWFLAKE_ENGINE_SQLALCHEMY_CONNECT_ARGS_ACCOUNT: ajwa-dev
+          SNOWFLAKE_ENGINE_SQLALCHEMY_CONNECT_ARGS_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_ENGINE_SQLALCHEMY_CONNECT_ARGS_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_ENGINE_SQLALCHEMY_CONNECT_ARGS_DATABASE: mydb

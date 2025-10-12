@@ -29,3 +29,12 @@ You can use differen roles to create objects, since it will be using an OAuth au
 
 
 Can't use the query history as it holds info only up to one year https://select.dev/posts/snowflake-query-history
+
+
+Use SQLAlchemy to establish the connection for oracle and snowflake
+https://chatgpt.com/c/6873b4d5-36ac-800d-b8ac-0a62e72f3724
+
+Not using id tags to identify object, this limitation is OK
+Also not using different owners for each object, using one more sequire anyway.
+These simplify things.
+Probably not implementing warehouse size, since it is snowflake specific.

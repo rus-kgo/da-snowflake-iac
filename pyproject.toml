@@ -1,5 +1,5 @@
 [tool.ruff]
-lint.extend-select = ["C4", "SIM", "TCH", "UP", "N", "D", "FBT", "COM", "T10", "ICN", "LOG", "G", "Q", "RET", "SLF", "TID", "TC", "ARG", "TRY", "FLY"]
-lint.ignore = []
+extend-select = ["C4", "SIM", "UP", "N", "D", "FBT", "COM", "T10", "ICN", "LOG", "G", "Q", "RET", "SLF", "TID", "TC", "ARG", "TRY", "FLY"]
+ignore = []
 show-fixes = true
 target-version = "py311"

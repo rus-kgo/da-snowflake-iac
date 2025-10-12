@@ -1,6 +1,6 @@
-name: 'Snowflake IaC'
+name: 'SQL IaC'
 author: 'Ruslan Gonzalez Konstantinov'
-description: 'Deploy to Snowflake IaC'
+description: 'SQL database system infrastructure as code.'
 inputs:
   run-mode:
     description: 'Run mode determines which iac_actions can be performed. Valid options: `create-or-update`, `destroy`.
@@ -10,27 +10,18 @@ inputs:
     description: 'Definitions path should point to the file or folder in the repo that contains the resource definitions.'
     required: true
     default: '/definitions'
-  resources-path:
-    description: 'Do not use unless using your own resources. Resources path should point to the file or folder in the repo that contains the resource sql templates.'
+  database-system:
+    description: 'Data base system. Currently suppoerted: oracle, snowflake.'
     required: true
-    default: '/snowflake-iac/resources'
+    default: 'snowflake'
+  resources-file:
+    description: 'Do not use unless using your own resources. Resources path should point to the file in the repo that contains the resource sql templates.'
+    required: true
+    default: '/sqliac/resources.toml'
   dry-run:
     description: 'When dry run is true, the pipeline will not make any changes to Snowflake.'
     required: false
     default: 'false'
-  database:
-    description: 'Name of the default database.'
-    required: false
-    default: None
-  schema:
-    description: 'Name of the default schema.'
-    required: false
-    default: None
-  warehouse-size:
-    description: 'Re-size the warehouse if needed. Valid options: XSMALL, SMALL, MEDIUM, LARGE, XLARGE, XXLARGE, XXXLARGE, X4LARGE, X5LARGE, X6LARGE
-    required: false
-    type: string
-    default: XSMALL
 runs:
   using: 'docker'
   image: 'Dockerfile'

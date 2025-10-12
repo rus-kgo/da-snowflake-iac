@@ -1,9 +1,7 @@
 """Unit test module."""
 
 import unittest
-import textwrap
-from unittest.mock import mock_open, patch
-import os
+from unittest.mock import patch
 
 from utils import Utils
 from errors import DefinitionKeyError, DependencyError, TemplateFileError
@@ -14,8 +12,8 @@ class TestUtils(unittest.TestCase):
     def setUp(self):
         """Set up the Utils loader for each test."""
         self.loader = Utils(
-            resources_folder="resources",
-            definitions_folder = "definitions",
+            resources_path="resources.toml",
+            definitions_path = "definitions",
         )
 
     @patch("tomllib.load")
@@ -230,7 +228,7 @@ class TestUtils(unittest.TestCase):
             "wait_time": "",
         }
 
-        # This scrip will fail. The success is in removing the special charachters
+        # This scrip will fail. The success is in removing the special charachters.
         expected = "CREATE ROLE bi_god_role\nDROP ALL haha"
 
         result = self.loader.render_templates(
@@ -240,5 +238,71 @@ class TestUtils(unittest.TestCase):
             obj_name=obj_name,
         )
         self.assertEqual(result, expected)
+
+    def test_render_templates_with_invalid_definition(self):
+        """Test that render_templates raises TemplateFileError for an invalid definiton of the resource."""
+        template = """
+        {% if iac_action.upper() == 'CREATE' %}
+
+        CREATE ROLE {{ name }} 
+        {%if comment != "" %}COMMENT = {{ comment }}{% endif %};
+
+        {% elif iac_action.upper() == 'DROP' %}
+        DROP ROLE {{ name }};
+
+        {% endif %}
+        """
+
+        obj_name = "bi_god_role"
+
+        definition = {
+            # missing 'name' variable
+            "comment": "",
+            "depends_on": {},
+            "wait_time": "",
+        }
+
+        with self.assertRaises(TemplateFileError):
+            self.loader.render_templates(
+                template=template,
+                definition=definition,
+                iac_action="create",
+                obj_name=obj_name,
+            )
+
+    @patch("tomllib.load")
+    @patch.dict("os.environ", {
+    "SQLITE_ENGINE_SQLALCHEMY_CONNECT_ARGS_TIMEOUT": "1",
+    "SQLITE_ENGINE_SQLALCHEMY_CONNECT_ARGS_CHECK_SAME_THREAD": "False",
+    "SQLITE_ENGINE_SQLALCHEMY_CONNECT_ARGS_ISOLATION_LEVEL": "None",
+}, clear=True)
+    def test_create_db_sys_connection_with_valid_config(self, mock_tomlib_load):
+        """Test creating database system connection with sqlalchemy."""
+        mock_tomlib_load.return_value = {
+            "sqlite":{
+                "engine":{
+                    "sqlalchemy.url":"sqlite://",
+                    "sqlalchemy.connect_args":{
+                        "timeout":1,
+                        "check_same_thread": False,
+                        "isolation_level": None,
+                        },
+                },
+            },
+        }
+
+        conn = self.loader.create_db_sys_connection(database_system="sqlite")
+
+        # Assert that the returned object is a SQLAlchemy Connection
+        from sqlalchemy.engine import Connection
+        assert isinstance(conn, Connection)
+
+        # Optionally, check it works by running a trivial query
+        result = conn.exec_driver_sql("SELECT 1").scalar_one()
+        assert result == 1
+
+        conn.close()
+
+
 if __name__ == "__main__":
     unittest.main()

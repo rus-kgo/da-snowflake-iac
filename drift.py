@@ -7,59 +7,18 @@ Drift is the term for when the real-world state of your infrastructure differs f
 import pandas as pd
 import json
 from typing import Literal, Any
-from snowflake.connector import SnowflakeConnection
 
 
 
 class ObjectDriftCheck:
     """Drift check of the snowflake objects."""
 
-    def __init__(self, conn:SnowflakeConnection) -> dict:
+    def __init__(self, conn:object) -> dict:
         """Initialize the comparator with Snowflake connection parameters and YAML definitions file path.
         
         :param conn: Dictionary of Snowflake connection parameters.
         """
         self.conn = conn
-
-    def _flatten_nested_dict(self, data:dict[str, Any], nested_field:str|None) -> pd.DataFrame:
-        """Convert a nested dictionary with a specified nested field into a flattened DataFrame.
-
-        :param data: Dictionary containing both regular and nested fields
-        :param nested_field: Name of the field containing nested dictionaries (default: "columns")
-        :return:
-            pandas.DataFrame: Flattened DataFrame with Property and Value columns
-        """
-        # Separate nested field from regular fields
-        regular_items = {k: v for k, v in data.items() if k != nested_field}
-
-        # Handle regular fields
-        regular_rows = []
-        for key, value in regular_items.items():
-            if isinstance(value, list):
-                value = f"{tuple(value)}" if len(value) > 1 else value[0]
-            elif isinstance(value, dict):
-                value = str(value)
-            elif value is None:
-                value = "null"
-            regular_rows.append({
-                "Property": key, 
-                "Value": value,
-                })
-
-        # Handle nested fields
-        nested_rows = []
-        if nested_field and data[nested_field]:
-            first_nested_item = data[nested_field][0]
-            for key in first_nested_item:
-                nested_rows.append({
-                    "Property": f"{nested_field}_{key}",
-                    "Value": first_nested_item[key],
-                })
-        
-        # Combine and create DataFrame
-        return pd.DataFrame(regular_rows + nested_rows)
-
-            
 
 
     def query_fetch_to_df(self, query:str) -> pd.DataFrame:

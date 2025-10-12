@@ -3,7 +3,6 @@
 This module provides:
 - main: main function that orchestrates the pipeline;
 - str_to_bool: function for bool input vars;
-- str_to_json: function for json string input vars;
 - to_str: function for string input vars that might be empty or null;
 """
 
@@ -11,10 +10,10 @@ import yaml
 import os
 import re
 import json
-import snowflake.connector as sc
+import tomllib
 
 from utils import Utils
-from errors import DefinitionKeyError, TemplateFileError, SnowflakeConnectionError
+from errors import DefinitionKeyError, TemplateFileError, FilePathError
 from drift import ObjectDriftCheck
 
 RESET = "\033[0m"
@@ -32,19 +31,11 @@ def str_to_bool(s: str) -> bool:
         raise ValueError(f"Invalid value for boolean: {s}")  # noqa: TRY003
     return s == "true"
 
-def str_to_json(s: str | None) -> dict | None:
-    """Convert a string it a json dict."""
-    if s is None or s == "" or s == "None":
-        return None
-
-    return json.loads(s)
-
 def to_str(s: str | None) -> str | None:
     """Make sure it a string, return None empty."""
     if s is None or s == "None" or s == "":
         return None
     return s
-
 
 
 def main():
@@ -53,53 +44,22 @@ def main():
         workspace = os.environ["GITHUB_WORKSPACE"]
 
         # Inputs
+        database_system = os.environ["INPUT_DATABASE-SYSTEM"]
         definitions_path = os.environ.get("INPUT_DEFINITIONS-PATH")
         resources_path = os.environ.get("INPUT_RESOURCES-PATH")
         dry_run = str_to_bool(os.environ["INPUT_DRY-RUN"])
         run_mode = os.environ["INPUT_RUN-MODE"]
-        database = to_str(os.environ.get("INPUT_DATABASE", None)) 
-        schema = to_str(os.environ.get("INPUT_SCHEMA", None)) 
-        warehouse_size = to_str(os.environ.get("INPUT_WAREHOUSE-SIZE", None)) 
 
-        # Environment
-        user = os.environ["SNOWFLAKE_USER"]
-        account = os.environ["SNOWFLAKE_ACCOUNT"]
-        warehouse = os.environ["SNOWFLAKE_WAREHOUSE"]
-        sf_app_client_id = os.environ["SNOWFLAKE_APP_CLIENT_ID"]
-        sf_app_client_secret = os.environ["SNOWFLAKE_APP_CLIENT_SECRET"]
-        sf_app_tenant_id = os.environ["SNOWFLAKE_APP_TENANT_ID"]
-        sf_app_scope = os.environ["SNOWFLAKE_APP_SCOPE"]
     except KeyError as e:
         raise ValueError(f"Missing environment variable: {e}") from e  # noqa: TRY003
 
 
-    # Snowflake resources that contain definition in the SHOW command.
-    show_only_objects = ["view","database", "role"]
-
-    # Snowflake resource with DESCRIBE output as nested field.
-    nested_desc = [{"dynamic table":"columns"}]
-
-    # Snowflake resources that can be granted or revokeced
-    granting = ["grant"]
-
-    # Object with create or alter new feature in preview that combines create and alter in on DDL
-    # https://docs.snowflake.com/en/sql-reference/sql/create-or-alter
-    create_or_alter = ["views","table","procedure", "column","schema","task"]
-
-    resources_folder = resources_path
     definitions_path = f"{workspace}{definitions_path}"
 
     utils = Utils(
-        sf_app_client_id = sf_app_client_id,
-        sf_app_client_secret = sf_app_client_secret,
-        sf_app_tenant_id = sf_app_tenant_id,
-        sf_app_scope = sf_app_scope,
-        definitions_folder=definitions_path,
-        resources_folder=resources_folder,
+        definitions_path=definitions_path,
+        resources_path=resources_path,
     )
-
-    # First check if all definitions have their tags, assign a tag if not
-    utils.assign_pipeline_tag_id()
 
     # Map the dependencies of all the definitions in the yaml files
     map = utils.dependencies_map()
@@ -107,222 +67,97 @@ def main():
     # Do topographic sorting of the dependecies
     sorted_map = utils.dependencies_sort(map)["map"]
 
-    # Get toke for Snowflake connection
-    token = utils.get_oauth_access_token()
-
-    try:
-        conn_params = {
-            "user":user,
-            "account":account,
-            "authenticator":"oauth",
-            "token":token,
-            "warehouse":warehouse,
-            "database":database,
-            "schema":schema,
-        }
-
-        conn = sc.connect(**conn_params)
-
-        if warehouse_size:
-            cur = conn.cursor()
-            # Get the current warehouse size to set it back to default at the and of the run.
-            cur.execute(f"SHOW PARAMETERS LIKE 'warehouse_size' IN WAREHOUSE {warehouse};")
-            default_warehouse_size = cur.fetchone()[1]
-
-            # Set the warehouse size for the run
-            cur.execute(f"alter warehouse {warehouse} set warehouse_size = {warehouse_size};")
-
-    except Exception as e:
-        raise SnowflakeConnectionError(error=e, conn_params=conn_params)
-
-
-
+    # Establish the connection
+    conn = utils.create_db_sys_connection(database_system=database_system)
 
     # Initate drift class to compare object states
     drift = ObjectDriftCheck(conn=conn)
 
+    # Load all resources
+    try:
+        with open(resources_path, "rb") as f:
+            db_sys_config = tomllib.load(f)
+            db_sys_resources = db_sys_config[database_system]["resources"]
+    except FileNotFoundError:
+        raise FilePathError(resources_path)
+
+
     # Print out the map planning, excecute if not a dry-run.
-    print(f"{CYAN}account: {conn_params['account']}{RESET}\n")
     for i in sorted_map:
         object, object_name = i.split("::")
 
-        file_path = os.path.join(definitions_path, f"{object}.yml")
+        file_path = os.path.join(definitions_path, f"{object}.toml")
 
         try:
-            with open(file_path) as f:
-                definition = yaml.safe_load(f)
+            with open(file_path, "rb") as f:
+                definition = tomllib.load(f)
         except FileNotFoundError:
             raise DefinitionKeyError(object) 
 
-        # Making sure the object is correctly named `database role` instead of `database_role`
-        sf_object = re.sub(r"_", " ", object)
+        try:
+            for obj_def in definition[object]:
+                # This is for benefit of following the sorter order
+                if obj_def["name"] == object_name:
 
+                    # Check if the object defintion has drifted from it's state in the database.
+                    obj_drift = drift.object_state(object_definition=obj_def)
 
-        # Granting snowflake objects that are not created or dropped
-        if sf_object in granting:
-            try:
-                for d_state in definition[object]:
-                    # This is for benefit of following the sorter order
-                    if d_state["name"] == object_name and run_mode.lower() == "create-or-update":
+                    if run_mode.lower() == "create-or-update":
+                        # If there is no drift, then it is a new object.
+                        if not obj_drift:
+                            template = db_sys_resources[object]["template"]
+                            iac_action = db_sys_resources[object]["iac_action"]
                             sql = utils.render_templates(
-                                    template_file=f"{object}.sql",
-                                    definition=d_state,
-                                    iac_action="GRANT",
+                                    template=template,
+                                    definition=obj_def,
+                                    obj_name=object_name,
+                                    iac_action=iac_action["create"],
                                     )
-                            print(f"\n{GREEN} + Grant {sf_object}{RESET}")
+
+                            print(f"\n{GREEN} + Create '{object}'{RESET}")
                             print(sql)
 
                             if not dry_run:
-                                utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
+                                utils.execute_rendered_sql_template(connection=conn, definition=obj_def, sql=sql)
 
-                    if d_state["name"] == object_name and run_mode.lower() == "destroy":
+                        # Do nothing if the the object has not drifted, definition and the state are the same.
+                        elif len(obj_drift) == 0:
+                            continue
+
+
+                        # If the object drifted, alter the properties of the object.
+                        elif obj_drift["name"] == obj_def["name"]:
+
                             sql = utils.render_templates(
-                                    template_file=f"{object}.sql",
-                                    definition=d_state,
-                                    iac_action="REVOKE",
+                                    template=template,
+                                    definition=obj_def,
+                                    obj_name=object_name,
+                                    iac_action=iac_action["alter"],
                                     )
-                            print(f"\n{RED} - Revoke {sf_object}{RESET}")
+
+                            print(f"\n{YELLOW} ~ Alter '{object}'{RESET}")
                             print(sql)
 
                             if not dry_run:
-                                utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
-            except Exception as e:
-                if warehouse_size:
-                    cur.execute(f"alter warehouse {warehouse} set warehouse_size = {default_warehouse_size};")
-                conn.close()
-                raise TemplateFileError(object, folder=resources_folder, error=e)
-        
-        # Create or alter new feature in preview that combines create and alter in one DDL
-        # https://docs.snowflake.com/en/sql-reference/sql/create-or-alter
-        elif sf_object in create_or_alter:
-            try:
-                for d_state in definition[object]:
-                    # This is for benefit of following the sorter order
-                    if d_state["name"] == object_name and run_mode.lower() == "create-or-update":
-                            sql = utils.render_templates(
-                                    template_file=f"{object}.sql",
-                                    definition=d_state,
-                                    iac_action="CREATE OR ALTER",
-                                    )
-                            print(f"\n{BRIGHT_GREEN} +~ Create or Alter {sf_object}{RESET}")
-                            print(sql)
+                                utils.execute_rendered_sql_template(connection=conn, definition=obj_def, sql=sql)
 
-                            if not dry_run:
-                                utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
+                    elif run_mode.lower() == "destroy":
+                        sql = utils.render_templates(
+                                template=template,
+                                definition=obj_def,
+                                obj_name=object_name,
+                                iac_action=iac_action["drop"],
+                                )
 
-                    if d_state["name"] == object_name and run_mode.lower() == "destroy":
-                            sql = utils.render_templates(
-                                    template_file=f"{object}.sql",
-                                    definition=d_state,
-                                    iac_action="DROP",
-                                    )
-                            print(f"\n{RED} - Drop {sf_object}{RESET}")
-                            print(sql)
+                        print(f"\n{RED} - Drop '{object}'{RESET}")
+                        print(sql)
 
-                            if not dry_run:
-                                utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
-            except Exception as e:
-                if warehouse_size:
-                    cur.execute(f"alter warehouse {warehouse} set warehouse_size = {default_warehouse_size};")
-                conn.close()
-                raise TemplateFileError(object, folder=resources_folder, error=e)
+                        if not dry_run:
+                                utils.execute_rendered_sql_template(connection=conn, definition=obj_def, sql=sql)
 
-
-        else:
-            
-            try:
-                for d_state in definition[object]:
-                    # This is for benefit of following the sorter order
-                    if d_state["name"] == object_name:
-
-                        # Here we are getting the tag to compare it with the snowfalke object instead o using the name
-                        object_id_tag = d_state["object_id_tag"]
-
-                        describe_object = "No" if sf_object in show_only_objects else "Yes"
-
-                        for d in nested_desc:
-                            nested_field = d.get(sf_object, None)
-
-
-                        sf_drift = drift.object_state(
-                            object_id=object_id_tag, 
-                            object_definition=d_state, 
-                            sf_object=sf_object,
-                            describe_object=describe_object,
-                            nested_field=nested_field,
-                            )
-
-                        if run_mode.lower() == "create-or-update":
-                            if not sf_drift:
-                                sql = utils.render_templates(
-                                        template_file=f"{object}.sql",
-                                        definition=d_state,
-                                        iac_action="CREATE",
-                                        )
-
-                                print(f"\n{GREEN} + Create {sf_object}{RESET}")
-                                print(sql)
-
-                                if not dry_run:
-                                    utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
-
-                            # Do nothing if the states are the same 
-                            elif len(sf_drift) == 0:
-                                continue
-
-                            # If the object exists, but the definition has a new name, alter name
-                            elif sf_drift["name"] != d_state["name"]:
-
-                                sql = utils.render_templates(
-                                        template_file=f"{object}.sql",
-                                        definition=d_state,
-                                        iac_action="ALTER",
-                                        new_name=d_state["name"],
-                                        old_name=sf_drift["name"],
-                                        )
-
-                                print(f"\n{YELLOW} ~ Alter {sf_object}{RESET}")
-                                print(sql)
-
-                                if not dry_run:
-                                    utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
-
-                            # If the object exists and has the same name, alter the properties of the object
-                            elif sf_drift["name"] == d_state["name"]:
-
-                                sql = utils.render_templates(
-                                        template_file=f"{object}.sql",
-                                        definition=d_state,
-                                        iac_action="ALTER",
-                                        )
-
-                                print(f"\n{YELLOW} ~ Alter {sf_object}{RESET}")
-                                print(sql)
-
-                                if not dry_run:
-                                    utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
-
-                        elif run_mode.lower() == "destroy":
-                            sql = utils.render_templates(
-                                    template_file=f"{object}.sql",
-                                    definition=d_state,
-                                    iac_action="DROP",
-                                    )
-
-                            print(f"\n{RED} - Drop {sf_object}{RESET}")
-                            print(sql)
-
-                            if not dry_run:
-                                    utils.execute_rendered_template(connection=conn, definition=d_state, sql=sql)
-
-            except Exception as e:
-                if warehouse_size:
-                    cur.execute(f"alter warehouse {warehouse} set warehouse_size = {default_warehouse_size};")
-                conn.close()
-                raise TemplateFileError(object, folder=resources_folder, error=e)
-
-    if warehouse_size:
-        cur.execute(f"alter warehouse {warehouse} set warehouse_size = {default_warehouse_size};")
+        except Exception as e:
+            conn.close()
+            raise TemplateFileError(object, folder=resources_path, error=e)
     conn.close()
 
 if __name__ == "__main__":

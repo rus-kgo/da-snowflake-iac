@@ -1,0 +1,185 @@
+[snowflake.engine]
+sqlalchemy.url = "snowflake://"
+sqlalchemy.connect_args.account = ""
+sqlalchemy.connect_args.user = ""
+sqlalchemy.connect_args.password = ""
+sqlalchemy.connect_args.database = ""
+sqlalchemy.connect_args.schema = ""
+sqlalchemy.connect_args.role = ""
+sqlalchemy.connect_args.warehouse = ""
+sqlalchemy.connect_args.warehouse_size = ""
+sqlalchemy.connect_args.private_key_path = ""
+sqlalchemy.connect_args.private_key = ""
+sqlalchemy.connect_args.private_key_passphrase = ""
+
+[snowflake.resources.account_role]
+iac_action.create = "CREATE"
+iac_action.alter = ""
+iac_action.drop = "DROP"
+status_query = '''
+SHOW ROLES LIKE {{ name }};
+
+SELECT 
+NAME,
+COMMENT
+FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+'''
+template = '''
+{% if iac_action.upper() == 'CREATE' %}
+{{ iac_action }} ROLE {{ name }} 
+{% if comment %} COMMENT = {{ comment }}; {{% endif %}}
+
+{% elif iac_action.upper() == 'DROP' %}
+{{ iac_action }} ROLE {{ name }};
+
+{% endif -%}
+'''
+
+[snowflake.resources.database_role]
+iac_action.create = "CREATE OR ALTER"
+iac_action.alter = "CREATE OR ALTER"
+iac_action.drop = "DROP"
+status_query = '''
+SHOW DATABASE ROLES LIKE {{ name }};
+SELECT 
+NAME,
+COMMENT
+FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
+'''
+template = '''
+{% if iac_action.upper() == 'CREATE' %}
+{{ iac_action }} DATABASE ROLE {{ name }} 
+{% if comment %} COMMENT = {{ comment }} {{%endif}};
+
+{% elif iac_action.upper() == 'DROP' %}
+{{ iac_action }} ROLE {{ name }};
+
+{% endif -%}
+'''
+
+[snowflake.resources.views]
+iac_action.create = "CREATE OR ALTER"
+iac_action.alter = "CREATE OR ALTER"
+iac_action.drop = "DROP"
+status_query = ""
+template = '''
+{% if iac_action.upper() == 'DROP' %}
+{{ iac_action }} VIEW {{ name }};
+
+{% elif iac_action.upper() == 'ALTER' and new_name %}
+{{ iac_action }} VIEW {{ old_name }} RENAME TO {{ new_name }};
+
+{% elif iac_action.upper() == 'ALTER' and (secure or change_tracking|string|upper !="" or comment) %}
+{% if secure %}ALTER VIEW {{ name }} SET SECURE {% else %}ALTER VIEW {{ name }} UNSET SECURE;{% endif %}
+{% if change_tracking|string|upper !="" %}ALTER VIEW {{ name }}
+SET CHANGE_TRACKING = {{ change_tracking|string|upper }};{% endif %}
+{% if comment %}ALTER VIEW {{ name }} SET
+COMMENT = '{"comment":"{{ comment }}", "object_id_tag": "{{ object_id_tag }}"}';{% endif %}
+
+{% elif iac_action.upper() == 'CREATE'%}
+{{ iac_action }} 
+{% if secure %}SECURE {% endif -%}
+{% if temporary %}TEMPORARY {% endif -%}
+{% if recursive %}RECURSIVE {% endif -%}
+VIEW {{ name }}
+{% if change_tracking %}CHANGE_TRACKING = TRUE {% endif %}
+{% if copy_grants %}COPY_GRANTS {% endif %}
+COMMENT = '{"comment":"{{ comment }}", "object_id_tag": "{{ object_id_tag }}"}'
+AS {{ as_ }};
+{% endif -%}
+'''
+
+[snowflake.resources.grant]
+status_query = ""
+iac_action.create = "GRANT"
+iac_action.alter = ""
+iac_action.drop = "REVOKE"
+template = '''
+{% if iac_action.upper() == 'GRANT' %}
+GRANT {{ privilege }} ON {{ on_object_type }} {{ on_object }}
+TO ROLE {{ to_role }}
+{% if with_grant_option %} WITH GRANT OPTION {% endif %};
+
+{% elif iac_action.upper() == 'REVOKE' %}
+REVOKE {{ privilege }} ON {{ on_object_type }} {{ on_object }}
+FROM ROLE {{ to_role }};
+
+{% endif -%}
+'''
+[swnoflake.resources.security_integration]
+status_query = ""
+iac_action.create = "CREATE"
+iac_action.alter = "ALTER"
+iac_action.drop = "DROP"
+template = """
+{% if iac_action.upper() == 'DROP' %}
+{{ iac_action }} SECURITY INTEGRATION {{ name }};
+{% else %}
+{{ iac_action }} SECURITY INTEGRATION {{ name }}
+{% if iac_action.upper() == 'ALTER' -%} 
+SET 
+{% endif -%}
+TYPE = EXTERNAL_OAUTH
+{% if enabled %} ENABLED = {{ enabled }} {% endif %}
+{% if external_oauth_type %} EXTERNAL_OAUTH_TYPE = '{{ external_oauth_type }}' {% endif %}
+{% if external_oauth_issuer %} EXTERNAL_OAUTH_ISSUER = ('{{ external_oauth_issuer | join("', '")}}') {% endif %}
+{% if external_oauth_token_user_mapping_claim %} EXTERNAL_OAUTH_TOKEN_USER_MAPPING_CLAIM = ('{{ external_oauth_token_user_mapping_claim | join ("', '")}}') {% endif %}
+{% if external_oauth_snowflake_user_mapping_attribute %} EXTERNAL_OAUTH_SNOWFLAKE_USER_MAPPING_ATTRIBUTE = '{{ external_oauth_snowflake_user_mapping_attribute }}' {% endif %}
+{% if external_oauth_jws_keys_url %} EXTERNAL_OAUTH_JWS_KEYS_URL = ('{{ external_oauth_jws_keys_url | join("', '") }}') {% endif %}
+{% if external_oauth_blocked_roles_list %} EXTERNAL_OAUTH_BLOCKED_ROLES_LIST = ('{{ external_oauth_blocked_roles_list | join("', '") }}') {% endif %}
+{% if external_oauth_allowed_roles_list %} EXTERNAL_OAUTH_ALLOWED_ROLES_LIST = ('{{ external_oauth_allowed_roles_list | join("', '") }}') {% endif %}
+{% if external_oauth_rsa_public_key %} EXTERNAL_OAUTH_RSA_PUBLIC_KEY = '{{ external_oauth_rsa_public_key }}' {% endif %}
+{% if external_oauth_rsa_public_key_2 %} EXTERNAL_OAUTH_RSA_PUBLIC_KEY_2 = '{{ external_oauth_rsa_public_key_2 }}' {% endif %}
+{% if external_oauth_audience_list %} EXTERNAL_OAUTH_AUDIENCE_LIST = ('{{ external_oauth_audience_list | join("', '") }}') {% endif %}
+{% if external_oauth_any_role_mode %} EXTERNAL_OAUTH_ANY_ROLE_MODE = '{{ external_oauth_any_role_mode }}' {% endif %}
+{% if external_oauth_scope_delimiter %} EXTERNAL_OAUTH_SCOPE_DELIMITER = '{{ external_oauth_scope_delimiter }}' {% endif %}
+{% if external_oauth_scope_mapping_attribute %} EXTERNAL_OAUTH_SCOPE_MAPPING_ATTRIBUTE = '{{ external_oauth_scope_mapping_attribute }}' {% endif %}
+COMMENT = '{"comment":"{{ comment }}", "object_id_tag": "{{ object_id_tag }}"}';
+{% endif %}
+"""
+
+[sqlite.engine]
+"sqlalchemy.url" = "sqlite:///"
+"sqlalchemy.connect_args".timeout = 1 
+
+[sqlite.resources.table]
+status_query = """
+WITH tbl AS (
+    SELECT '{{name}}' AS name
+    WHERE EXISTS (
+        SELECT 1
+        FROM sqlite_master
+        WHERE type = 'table'
+          AND name = '{{name}}'
+    )
+),
+cols AS (
+    SELECT '{{name}}' AS name,
+           GROUP_CONCAT(name, ',') AS col_list
+    FROM pragma_table_info('{{name}}')
+)
+SELECT 'name' AS property, tbl.name AS value
+FROM tbl
+UNION ALL
+SELECT 'column', cols.col_list AS value
+FROM cols;
+"""
+iac_action.create = "CREATE"
+iac_action.alter = "ALTER"
+iac_action.drop = "DROP"
+
+template = """
+{% if iac_action.upper() == 'CREATE' %}
+CREATE TABLE {{ name }} (
+{% for column in columns %}
+    {{ column.name }} {{ column.type }}
+    {%- if not column.nullable %} NOT NULL {%- endif %}
+    {%- if not loop.last %}, {% endif %}
+{% endfor %}
+);
+
+{% elif iac_action.upper() == 'DROP' %}
+DROP TABLE {{ name }};
+
+{% endif -%}
+"""
