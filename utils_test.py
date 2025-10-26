@@ -300,7 +300,7 @@ class TestUtils(unittest.TestCase):
         return conn
 
     def test_execute_rendered_sql_template(self):
-        """Test the execution of SQL that would return error mesasge."""
+        """Test the execution of SQL."""
         conn:Connection = self.test_create_db_sys_connection_with_valid_config()
 
         valid_sql = """
