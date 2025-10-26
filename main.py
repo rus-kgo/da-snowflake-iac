@@ -118,7 +118,12 @@ def main():
                             print(sql)
 
                             if not dry_run:
-                                utils.execute_rendered_sql_template(connection=conn, definition=obj_def, sql=sql)
+                                print(utils.execute_rendered_sql_template(
+                                    connection=conn,
+                                    object=object,
+                                    object_name=object_name,
+                                    sql=sql,
+                                ))
 
                         # Do nothing if the the object has not drifted, definition and the state are the same.
                         elif len(obj_drift) == 0:

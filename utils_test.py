@@ -2,9 +2,10 @@
 
 import unittest
 from unittest.mock import patch
+from sqlalchemy.engine import Connection
 
 from utils import Utils
-from errors import DefinitionKeyError, DependencyError, TemplateFileError
+from errors import DefinitionKeyError, DependencyError, TemplateFileError, SQLExecutionError
 
 class TestUtils(unittest.TestCase):  
     """Unit tests for the Utils class and its dependency-related methods."""
@@ -294,14 +295,52 @@ class TestUtils(unittest.TestCase):
         conn = self.loader.create_db_sys_connection(database_system="sqlite")
 
         # Assert that the returned object is a SQLAlchemy Connection
-        from sqlalchemy.engine import Connection
         assert isinstance(conn, Connection)
 
-        # Optionally, check it works by running a trivial query
-        result = conn.exec_driver_sql("SELECT 1").scalar_one()
-        assert result == 1
+        return conn
 
-        conn.close()
+    def test_execute_rendered_sql_template(self):
+        """Test the execution of SQL that would return error mesasge."""
+        conn:Connection = self.test_create_db_sys_connection_with_valid_config()
+
+        valid_sql = """
+            CREATE TABLE IF NOT EXISTS actors (
+                id INTEGER PRIMARY KEY,
+                name TEXT NOT NULL
+            )
+        """
+        invalid_sql = """
+            CREATE TABLE IF NOT EXISTS actors (
+                id INTEGER PRIMARY KEY
+                name TEXT NOT NULL
+            )
+        """
+        
+
+        # Asert valid sql
+        expectation = (
+            f"\n\033{'='*80}",
+            "SQL EXECUTION SUCCESSFULL",
+            f"{'='*80}\033[0m\n",
+        )
+
+        result = self.loader.execute_rendered_sql_template(
+            conn=conn,
+            sql=valid_sql,
+        )
+        assert result == expectation, \
+        f"Expected a mesaage: {expectation}; got: {result}."
+
+        
+        # Asert invalid sql
+        with self.assertRaises(SQLExecutionError):
+            result = self.loader.execute_rendered_sql_template(
+                conn=conn,
+                sql=invalid_sql,
+            )
+
+
+        
 
 
 if __name__ == "__main__":

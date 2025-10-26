@@ -14,7 +14,7 @@ from cryptography.hazmat.backends import default_backend
 from collections import deque
 from jinja2 import Environment, meta, UndefinedError, TemplateSyntaxError
 
-from errors import DefinitionKeyError, DependencyError, FilePathError, ClientCredentialsError, OAuthTokenError, TemplateFileError
+from errors import DefinitionKeyError, DependencyError, FilePathError, ClientCredentialsError, OAuthTokenError, TemplateFileError, SQLExecutionError
 
 
 
@@ -264,10 +264,23 @@ class Utils:
 
         return engine.connect()
     
-    def execute_rendered_sql_template(self, conn:Connection):
+    def execute_rendered_sql_template(
+            self,
+            conn:Connection,
+            sql:str,
+            ) -> None:
         """Execute rendered SQL templates using database system connection."""
-        #TODO:
-        pass
+        try:
+            conn.exec_driver_sql(sql)
+        except Exception as err:
+            raise SQLExecutionError(error=err)
+        else:
+            return (
+                f"\n\033{'='*80}",
+                "SQL EXECUTION SUCCESSFULL",
+                f"{'='*80}\033[0m\n",
+            )
+
 
 
     def zip_python_proc(self, file_path:str):

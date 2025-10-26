@@ -8,6 +8,12 @@ This module provides:
 
 import json
 
+# ANSI color codes for terminal output
+RESET = "\033[0m"
+RED = "\033[31m"
+YELLOW = "\033[33m"
+CYAN = "\033[36m"
+
 class FilePathError(Exception):
     """File path error class."""
 
@@ -141,3 +147,83 @@ class OAuthTokenError(Exception):
         if self.content:
             base_message += f"\nReason: {self.content}"
         return base_message
+
+class SQLExecutionError(Exception):
+    """Raised when SQL execution fails in the database."""
+
+    def __init__(
+        self, 
+        error: Exception, 
+        sql: str = None, 
+        object_type: str = None, 
+        object_name: str = None,
+        action: str = None,
+        database_system: str = None
+    ):
+        """Initialize the exception with detailed error information.
+
+        Args:
+            error (Exception): The original SQLAlchemy or database exception.
+            sql (str, optional): The SQL statement that failed.
+            object_type (str, optional): Type of database object (table, view, role, etc.).
+            object_name (str, optional): Name of the object being operated on.
+            action (str, optional): The action being performed (created, dropped, altered, etc.).
+            database_system (str, optional): The database system (snowflake, sqlite, etc.).
+
+        """
+        # Extract error details from SQLAlchemy exception
+        error_message = str(error)
+        error_code = getattr(error, 'code', None)
+        orig_error = getattr(error, 'orig', None)
+        
+        # Build the colored error message for GitHub Actions
+        parts = [
+            f"\n{RED}{'='*80}",
+            f"SQL EXECUTION ERROR",
+            f"{'='*80}{RESET}\n"
+        ]
+        
+        # Add object context if available
+        if object_type and object_name:
+            parts.append(
+                f"{RED}Failed to {action or 'execute'} {object_type}: {CYAN}'{object_name}'{RESET}"
+            )
+        
+        # Add database system if available
+        if database_system:
+            parts.append(f"{RED}Database System: {CYAN}{database_system.upper()}{RESET}")
+        
+        # Add error code if available
+        if error_code:
+            parts.append(f"{RED}Error Code: {CYAN}{error_code}{RESET}")
+        
+        # Add the original error message
+        parts.append(f"\n{RED}Error Message:{RESET}")
+        parts.append(f"{RED}{error_message}{RESET}")
+        
+        # Add original database error if different from SQLAlchemy wrapper
+        if orig_error and str(orig_error) != error_message:
+            parts.append(f"\n{RED}Database Error:{RESET}")
+            parts.append(f"{RED}{orig_error}{RESET}")
+        
+        # Add SQL statement if provided (truncated if too long)
+        if sql:
+            sql_preview = sql if len(sql) <= 500 else sql[:500] + "..."
+            parts.append(f"\n{RED}SQL Statement:{RESET}")
+            parts.append(f"{YELLOW}{sql_preview}{RESET}")
+        
+        parts.append(f"\n{RED}{'='*80}{RESET}\n")
+        
+        # Join all parts into final message
+        message = "\n".join(parts)
+        
+        super().__init__(message)
+        
+        # Store attributes for programmatic access
+        self.original_error = error
+        self.sql = sql
+        self.object_type = object_type
+        self.object_name = object_name
+        self.action = action
+        self.database_system = database_system
+        self.error_code = error_code
