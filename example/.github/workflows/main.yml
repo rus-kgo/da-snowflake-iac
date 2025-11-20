@@ -16,6 +16,7 @@ jobs:
           run-mode: 'create-or-update'
           definitions-path: '/definitions'
           dry-run: 'true'
+          database-system: "sqlite"
         env:
           SNOWFLAKE_ENGINE_SQLALCHEMY_CONNECT_ARGS_ACCOUNT: ajwa-dev
           SNOWFLAKE_ENGINE_SQLALCHEMY_CONNECT_ARGS_USER: ${{ secrets.SNOWFLAKE_USER }}

@@ -105,43 +105,6 @@ class DependencyError(Exception):
 
         super().__init__(message)
 
-class SnowflakeConnectionError(Exception):
-    """Raised when there is an issue establishing a Snowflake connection or cursor."""
-
-    def __init__(self, error, conn_params=None):
-        """Define the error message.
-
-        Args:
-            error (Exception): The original exception raised by the Snowflake connector.
-            conn_params (dict, optional): Connection parameters (excluding sensitive data like private keys).
-
-        """
-        sanitized_params = {
-            key: value
-            for key, value in (conn_params or {}).items()
-            if key not in ("private_key", "private_key_pwd", "token", "id_token", "access_token")
-        }
-
-        message = (
-            f"An error occurred while trying to establish a connection or create a cursor in Snowflake.\n"
-            f"Connection parameters: {sanitized_params}\n"
-            f"Original error: {error}"
-        )
-
-        super().__init__(message)
-
-class ClientCredentialsError(Exception):
-    """Rised when there is an issue getting a secret from AWS."""
-
-    def __init__(self, error:str):
-        """Define error message."""
-        message = (
-            f"An error occurred while trying to get a secret from AWS Secret Manager.\n"
-            f"Original error: {error}"
-        )
-        super().__init__(message)
-
-class OAuthTokenError(Exception):
     """Custom exception for errors occurring during token request."""
 
     def __init__(self,response=None, error=None):

@@ -12,57 +12,89 @@ sqlalchemy.connect_args.private_key_path = ""
 sqlalchemy.connect_args.private_key = ""
 sqlalchemy.connect_args.private_key_passphrase = ""
 
-[snowflake.resources.account_role]
-iac_action.create = "CREATE"
-iac_action.alter = ""
-iac_action.drop = "DROP"
-state_query = '''
-SHOW ROLES LIKE {{ name }};
+[snowflake.resources.database]
+status_query = """
+SELECT object_construct(
+    'name', database_name,
+    'owner', owner,
+    'comment', comment,
+    'created_on', created_on
+) as object_metadata
+FROM information_schema.databases
+WHERE database_name = '{{ name }}'
+LIMIT 1
+"""
 
-SELECT 
-NAME,
-COMMENT
-FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
-'''
-template = '''
-{% if iac_action.upper() == 'CREATE' %}
-{{ iac_action }} ROLE {{ name }} 
-{% if comment %} COMMENT = {{ comment }}; {{% endif %}}
+[snowflake.resources.schema]
+status_query = """
+SELECT object_construct(
+    'name', schema_name,
+    'database', catalog_name,
+    'owner', schema_owner,
+    'comment', comment,
+    'created_on', created_on
+) as object_metadata
+FROM information_schema.schemata
+WHERE schema_name = '{{ name }}' AND catalog_name = '{{ database }}'
+LIMIT 1
+"""
 
-{% elif iac_action.upper() == 'DROP' %}
-{{ iac_action }} ROLE {{ name }};
+[snowflake.resources.table]
+status_query = """
+WITH table_cols AS (
+    SELECT 
+        table_schema,
+        table_name,
+        ordinal_position,
+        column_name,
+        data_type,
+        is_nullable,
+        column_default,
+        comment
+    FROM information_schema.columns
+    WHERE table_name = '{{ name }}' AND table_schema = '{{ schema }}'
+)
+SELECT object_construct(
+    'name', t.table_name,
+    'database', t.table_catalog,
+    'schema', t.table_schema,
+    'owner', t.table_owner,
+    'comment', t.comment,
+    'columns', array_agg(
+        object_construct(
+            'name', tc.column_name,
+            'type', tc.data_type,
+            'nullable', tc.is_nullable = 'YES',
+            'default', tc.column_default,
+            'comment', tc.comment
+        ) ORDER BY tc.ordinal_position
+    )
+) as object_metadata
+FROM information_schema.tables t
+LEFT JOIN table_cols tc ON t.table_schema = tc.table_schema AND t.table_name = tc.table_name
+WHERE t.table_name = '{{ name }}' AND t.table_schema = '{{ schema }}'
+GROUP BY t.table_catalog, t.table_schema, t.table_name, t.table_owner, t.comment
+LIMIT 1
+"""
 
-{% endif -%}
-'''
-
-[snowflake.resources.database_role]
+[snowflake.resources.view]
+status_query = """
+SELECT object_construct(
+    'name', table_name,
+    'database', table_catalog,
+    'schema', table_schema,
+    'owner', table_owner,
+    'comment', comment,
+    'definition', view_definition
+) as object_metadata
+FROM information_schema.views
+WHERE table_name = '{{ name }}' AND table_schema = '{{ schema }}'
+LIMIT 1
+"""
 iac_action.create = "CREATE OR ALTER"
 iac_action.alter = "CREATE OR ALTER"
 iac_action.drop = "DROP"
-state_query = '''
-SHOW DATABASE ROLES LIKE {{ name }};
-SELECT 
-NAME,
-COMMENT
-FROM TABLE(RESULT_SCAN(LAST_QUERY_ID()));
-'''
-template = '''
-{% if iac_action.upper() == 'CREATE' %}
-{{ iac_action }} DATABASE ROLE {{ name }} 
-{% if comment %} COMMENT = {{ comment }} {{%endif}};
-
-{% elif iac_action.upper() == 'DROP' %}
-{{ iac_action }} ROLE {{ name }};
-
-{% endif -%}
-'''
-
-[snowflake.resources.views]
-iac_action.create = "CREATE OR ALTER"
-iac_action.alter = "CREATE OR ALTER"
-iac_action.drop = "DROP"
-state_query = ""
-template = '''
+template = """
 {% if iac_action.upper() == 'DROP' %}
 {{ iac_action }} VIEW {{ name }};
 
@@ -87,14 +119,68 @@ VIEW {{ name }}
 COMMENT = '{"comment":"{{ comment }}", "object_id_tag": "{{ object_id_tag }}"}'
 AS {{ as_ }};
 {% endif -%}
-'''
+"""
+
+[snowflake.resources.role]
+status_query = """
+SELECT object_construct(
+    'name', name,
+    'owner', owner,
+    'created_on', created_on,
+    'comment', comment
+) as object_metadata
+FROM information_schema.roles
+WHERE name = '{{ name }}'
+LIMIT 1
+"""
+
+[snowflake.resources.user]
+status_query = """
+SELECT object_construct(
+    'name', name,
+    'login_name', login_name,
+    'email', email,
+    'owner', owner,
+    'created_on', created_on,
+    'comment', comment
+) as object_metadata
+FROM information_schema.users
+WHERE name = '{{ name }}'
+LIMIT 1
+"""
+
+[snowflake.resources.warehouse]
+status_query = """
+SELECT object_construct(
+    'name', warehouse_name,
+    'owner', warehouse_owner,
+    'type', warehouse_type,
+    'size', warehouse_size,
+    'created_on', created_on,
+    'comment', comment
+) as object_metadata
+FROM information_schema.warehouses
+WHERE warehouse_name = '{{ name }}'
+LIMIT 1
+"""
 
 [snowflake.resources.grant]
-state_query = ""
+status_query = """
+SELECT object_construct(
+    'privilege', privilege,
+    'granted_on', granted_on,
+    'name', name,
+    'grantee_name', grantee_name,
+    'grant_option', grant_option
+) as object_metadata
+FROM information_schema.role_grants
+WHERE grantee_name = '{{ grantee_name }}' AND name = '{{ name }}'
+LIMIT 1
+"""
 iac_action.create = "GRANT"
 iac_action.alter = ""
 iac_action.drop = "REVOKE"
-template = '''
+template = """
 {% if iac_action.upper() == 'GRANT' %}
 GRANT {{ privilege }} ON {{ on_object_type }} {{ on_object }}
 TO ROLE {{ to_role }}
@@ -105,9 +191,37 @@ REVOKE {{ privilege }} ON {{ on_object_type }} {{ on_object }}
 FROM ROLE {{ to_role }};
 
 {% endif -%}
-'''
+"""
+
+[snowflake.resources.storage_integration]
+status_query = """
+SELECT object_construct(
+    'name', storage_integration_name,
+    'type', storage_provider,
+    'enabled', storage_allowed_locations IS NOT NULL,
+    'comment', comment,
+    'created_on', created_on
+) as object_metadata
+FROM information_schema.storage_integrations
+WHERE storage_integration_name = '{{ name }}'
+LIMIT 1
+"""
+
+[snowflake.resources.notification_integration]
+status_query = """
+SELECT object_construct(
+    'name', notification_integration_name,
+    'type', notification_type,
+    'enabled', enabled,
+    'comment', comment,
+    'created_on', created_on
+) as object_metadata
+FROM information_schema.notification_integrations
+WHERE notification_integration_name = '{{ name }}'
+LIMIT 1
+"""
+
 [swnoflake.resources.security_integration]
-state_query = ""
 iac_action.create = "CREATE"
 iac_action.alter = "ALTER"
 iac_action.drop = "DROP"
@@ -137,6 +251,234 @@ TYPE = EXTERNAL_OAUTH
 COMMENT = '{"comment":"{{ comment }}", "object_id_tag": "{{ object_id_tag }}"}';
 {% endif %}
 """
+state_query = """
+SELECT object_construct(
+    'name', security_integration_name,
+    'type', security_integration_type,
+    'enabled', enabled,
+    'comment', comment,
+    'created_on', created_on
+) as object_metadata
+FROM information_schema.security_integrations
+WHERE security_integration_name = '{{ name }}'
+LIMIT 1
+"""
+
+[snowflake.resources.procedure]
+status_query = """
+SELECT object_construct(
+    'name', procedure_name,
+    'database', procedure_catalog,
+    'schema', procedure_schema,
+    'owner', procedure_owner,
+    'comment', comment,
+    'language', procedure_language,
+    'definition', procedure_definition
+) as object_metadata
+FROM information_schema.procedures
+WHERE procedure_name = '{{ name }}' AND procedure_schema = '{{ schema }}'
+LIMIT 1
+"""
+
+[snowflake.resources.task]
+status_query = """
+SELECT object_construct(
+    'name', name,
+    'database', database_name,
+    'schema', schema_name,
+    'owner', owner,
+    'comment', comment,
+    'schedule', schedule,
+    'definition', definition
+) as object_metadata
+FROM information_schema.task_history
+WHERE name = '{{ name }}' AND schema_name = '{{ schema }}'
+GROUP BY name, database_name, schema_name, owner, comment, schedule, definition
+LIMIT 1
+"""
+
+[snowflake.resources.stream]
+status_query = """
+SELECT object_construct(
+    'name', stream_name,
+    'database', stream_catalog,
+    'schema', stream_schema,
+    'owner', stream_owner,
+    'comment', comment,
+    'source_table', table_name
+) as object_metadata
+FROM information_schema.streams
+WHERE stream_name = '{{ name }}' AND stream_schema = '{{ schema }}'
+LIMIT 1
+"""
+
+[snowflake.resources.stage]
+status_query = """
+SELECT object_construct(
+    'name', stage_name,
+    'database', stage_catalog,
+    'schema', stage_schema,
+    'owner', stage_owner,
+    'url', stage_url,
+    'comment', comment
+) as object_metadata
+FROM information_schema.stages
+WHERE stage_name = '{{ name }}' AND stage_schema = '{{ schema }}'
+LIMIT 1
+"""
+
+[snowflake.resources.dynamic_table]
+status_query = """
+WITH dt_cols AS (
+    SELECT 
+        table_schema,
+        table_name,
+        ordinal_position,
+        column_name,
+        data_type,
+        is_nullable,
+        comment
+    FROM information_schema.columns
+    WHERE table_name = '{{ name }}' AND table_schema = '{{ schema }}'
+)
+SELECT object_construct(
+    'name', dt.table_name,
+    'database', dt.table_catalog,
+    'schema', dt.table_schema,
+    'owner', dt.table_owner,
+    'comment', dt.comment,
+    'columns', array_agg(
+        object_construct(
+            'name', dtc.column_name,
+            'type', dtc.data_type,
+            'nullable', dtc.is_nullable = 'YES',
+            'comment', dtc.comment
+        ) ORDER BY dtc.ordinal_position
+    )
+) as object_metadata
+FROM information_schema.dynamic_tables dt
+LEFT JOIN dt_cols dtc ON dt.table_schema = dtc.table_schema AND dt.table_name = dtc.table_name
+WHERE dt.table_name = '{{ name }}' AND dt.table_schema = '{{ schema }}'
+GROUP BY dt.table_catalog, dt.table_schema, dt.table_name, dt.table_owner, dt.comment
+LIMIT 1
+"""
+
+[snowflake.resources.event_table]
+status_query = """
+WITH et_cols AS (
+    SELECT 
+        table_schema,
+        table_name,
+        ordinal_position,
+        column_name,
+        data_type,
+        is_nullable,
+        comment
+    FROM information_schema.columns
+    WHERE table_name = '{{ name }}' AND table_schema = '{{ schema }}'
+)
+SELECT object_construct(
+    'name', et.table_name,
+    'database', et.table_catalog,
+    'schema', et.table_schema,
+    'owner', et.table_owner,
+    'comment', et.comment,
+    'columns', array_agg(
+        object_construct(
+            'name', etc.column_name,
+            'type', etc.data_type,
+            'nullable', etc.is_nullable = 'YES',
+            'comment', etc.comment
+        ) ORDER BY etc.ordinal_position
+    )
+) as object_metadata
+FROM information_schema.event_tables et
+LEFT JOIN et_cols etc ON et.table_schema = etc.table_schema AND et.table_name = etc.table_name
+WHERE et.table_name = '{{ name }}' AND et.table_schema = '{{ schema }}'
+GROUP BY et.table_catalog, et.table_schema, et.table_name, et.table_owner, et.comment
+LIMIT 1
+"""
+
+[snowflake.resources.alert]
+status_query = """
+SELECT object_construct(
+    'name', alert_name,
+    'database', database_name,
+    'schema', schema_name,
+    'owner', owner,
+    'comment', comment,
+    'condition', condition,
+    'action', action,
+    'state', state
+) as object_metadata
+FROM information_schema.alerts
+WHERE alert_name = '{{ name }}' AND schema_name = '{{ schema }}'
+LIMIT 1
+"""
+
+[snowflake.resources.account_role]
+iac_action.create = "CREATE"
+iac_action.alter = ""
+iac_action.drop = "DROP"
+state_query = "SHOW ROLES LIKE '{{ name }}';"
+template = """
+{% if iac_action.upper() == 'CREATE' %}
+{{ iac_action }} ROLE {{ name }} 
+{% if comment %} COMMENT = '{{ comment }}'; {{% endif %}}
+
+{% elif iac_action.upper() == 'DROP' %}
+{{ iac_action }} ROLE {{ name }};
+
+{% endif -%}
+"""
+
+[snowflake.resources.database_role]
+iac_action.create = "CREATE OR ALTER"
+iac_action.alter = "CREATE OR ALTER"
+iac_action.drop = "DROP"
+state_query = "SHOW DATABASE ROLES LIKE '{{ name }}';"
+template = """
+{% if iac_action.upper() == 'CREATE' %}
+{{ iac_action }} DATABASE ROLE {{ name }} 
+{% if comment %} COMMENT = '{{ comment }}' {{% endif %}};
+
+{% elif iac_action.upper() == 'DROP' %}
+{{ iac_action }} ROLE {{ name }};
+
+{% endif -%}
+"""
+
+[snowflake.resources.views]
+iac_action.create = "CREATE OR ALTER"
+iac_action.alter = "CREATE OR ALTER"
+iac_action.drop = "DROP"
+state_query = "SHOW VIEWS LIKE '{{ name }}';"
+template = """
+{% if iac_action.upper() == 'DROP' %}
+{{ iac_action }} VIEW {{ name }};
+
+{% elif iac_action.upper() == 'ALTER' and new_name %}
+{{ iac_action }} VIEW {{ old_name }} RENAME TO {{ new_name }};
+
+{% elif iac_action.upper() == 'ALTER' and (secure or change_tracking|string|upper != "" or comment) %}
+{% if secure %}ALTER VIEW {{ name }} SET SECURE {% else %}ALTER VIEW {{ name }} UNSET SECURE;{% endif %}
+{% if change_tracking|string|upper != "" %}ALTER VIEW {{ name }} SET CHANGE_TRACKING = {{ change_tracking|string|upper }};{% endif %}
+{% if comment %}ALTER VIEW {{ name }} SET COMMENT = '{"comment":"{{ comment }}", "object_id_tag": "{{ object_id_tag }}"}';{% endif %}
+
+{% elif iac_action.upper() == 'CREATE' %}
+{{ iac_action }} 
+{% if secure %}SECURE {% endif -%}
+{% if temporary %}TEMPORARY {% endif -%}
+{% if recursive %}RECURSIVE {% endif -%}
+VIEW {{ name }}
+{% if change_tracking %}CHANGE_TRACKING = TRUE {% endif %}
+{% if copy_grants %}COPY_GRANTS {% endif %}
+COMMENT = '{"comment":"{{ comment }}", "object_id_tag": "{{ object_id_tag }}"}'
+AS {{ as_ }};
+{% endif -%}
+"""
+
+
 
 [sqlite.engine]
 "sqlalchemy.url" = "sqlite:///"
@@ -157,9 +499,9 @@ WITH table_info AS (
             )
         ) as columns
     FROM sqlite_master m
-    LEFT JOIN pragma_table_info('actors') p
+    LEFT JOIN pragma_table_info('{{ name }}') p
     WHERE m.type = 'table' 
-    AND m.name = 'actors'
+    AND m.name = '{{ name }}'
     GROUP BY m.name
 )
 SELECT json_object(

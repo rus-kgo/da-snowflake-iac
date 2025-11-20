@@ -63,7 +63,7 @@ class Utils:
         template: str,
         definition: dict = None,
         iac_action: str = None,
-        name: str = None,
+        resource_name: str = None,
     ) -> str:
         """Render the Jinja template of the resource.
 
@@ -71,7 +71,7 @@ class Utils:
             template (str): The resouce sql template to render.
             definition (dict, optional): The definition of the resource.
             iac_action (str, optional): The type of execution iac_action to perform in Snowflake (e.g., "create", "alter", or "drop").
-            name (str, optional): The name of the resouce resource.
+            resource_name (str, optional): The name of the resource.
 
         Returns:
             str: The rendered SQL template as a string.
@@ -89,7 +89,7 @@ class Utils:
             ]
             if missing_vars:
                 raise TemplateFileError(
-                    name,
+                    resource_name,
                     self.resources_path,
                     f"Definition is missing variables: {missing_vars}",
                 )
@@ -114,7 +114,7 @@ class Utils:
             sql_clean = sql_clean.strip(";")
 
         except (KeyError, TemplateSyntaxError, UndefinedError) as e:
-            raise TemplateFileError(name, self.resources_path, e) from e
+            raise TemplateFileError(resource_name, self.resources_path, e) from e
 
         return sqlparse.format(sql_clean, reindent=True, keyword_case="upper")
 

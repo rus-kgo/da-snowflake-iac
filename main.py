@@ -122,6 +122,7 @@ def run(config: InputConfig) -> None:  # noqa: PLR0912, PLR0915
                     rsc_state_query = utils.render_templates(
                         template=db_sys_resources[rsc]["state_query"],
                         resource_name=resource_name,
+                        definition=rsc,
                     )
 
                     rsc_drift = drift.resource_state(

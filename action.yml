@@ -1,6 +1,7 @@
 name: 'SQL IaC'
 author: 'Ruslan Gonzalez Konstantinov'
 description: 'SQL database system infrastructure as code.'
+
 inputs:
   run-mode:
     description: 'Run mode determines which iac_actions can be performed. Valid options: `create-or-update`, `destroy`.
@@ -22,6 +23,7 @@ inputs:
     description: 'When dry run is true, the pipeline will not make any changes to Snowflake.'
     required: false
     default: 'false'
+
 runs:
   using: 'docker'
   image: 'Dockerfile'

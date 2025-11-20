@@ -17,8 +17,8 @@ COPY requirements.txt /requirements.txt
 
 RUN /root/.local/bin/uv pip install --system --no-cache -r requirements.txt
 
-WORKDIR /snowflake-iac
+WORKDIR /sqliac
 
-COPY . /snowflake-iac
+COPY . /sqliac
 
-CMD ["python", "/snowflake-iac/main.py"]
+CMD ["python", "/sqliac/main.py"]
