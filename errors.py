@@ -1,7 +1,7 @@
 """Error classes for the pipeline.
 
 This module provides:
-- FilePathError: exception when the file path is incorrect;
+- FileError: exception when the file path is incorrect;
 - DefinitionKeyError: exception when the definition yaml file keys are incorrect;
 - DependencyError: exception when the names of the resources in the dependecy map are incorrect.
 """
@@ -14,11 +14,11 @@ from rich.syntax import Syntax
 SQL_PREVIEW_MAX_LENGTH = 500
 
 
-class FilePathError(Exception):
+class FileError(Exception):
     """File path error class."""
 
     def __init__(self, path:str=None, resource_type:str=None):
-        """Initialize the FilePathError with an optional path and resource type.
+        """Initialize the FileError with an optional path and resource type.
 
         Args:
             path (str, optional): The file path that caused the error.
@@ -26,9 +26,9 @@ class FilePathError(Exception):
         """
         if path:
             message = f"Not a valid file path: '{path}'"
-        elif path and resource_type:
-            message = f"Not a valid file path: '{path}' for " \
-                f"resource: '{resource_type}'"
+        elif resource_type and path:
+            message = f"Not a valid file for the resource: '{resource_type}' " \
+                f"In the file path {path}"
         super().__init__(message)
 
 class TemplateFileError(Exception):
@@ -106,31 +106,6 @@ class DependencyError(Exception):
         super().__init__(message)
 
     """Custom exception for errors occurring during token request."""
-
-    def __init__(self,response=None, error=None):
-        """Define error mssage.
-
-        Args:
-            response (requests.Response, optional): HTTP response object (if available).
-            error (Exception, optional): Original exception that was caught (if any).
-
-        """
-        super().__init__()
-        self.response = response
-        self.error = error
-        self.status_code = response.status_code if response else None
-        self.content = response.raise_for_status() if response else None
-
-    def __str__(self):
-        """Return a string representation of the message error."""
-        base_message = ("An error occurred while trying to get the access token for Snowflake API.\n")
-        if self.original_exception:
-            base_message += f"Original error: {self.error}"
-        if self.status_code:
-            base_message += f"Status Code: {self.status_code})"
-        if self.content:
-            base_message += f"\nReason: {self.content}"
-        return base_message
 
 class SQLExecutionError(Exception):
     """Raised when SQL execution fails in the database."""

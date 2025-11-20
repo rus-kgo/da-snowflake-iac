@@ -17,7 +17,7 @@ from rich.console import Console
 from errors import (
     DefinitionKeyError,
     DependencyError,
-    FilePathError,
+    FileError,
     TemplateFileError,
     SQLExecutionError,
 )
@@ -46,7 +46,7 @@ class Utils:
             self.definitions_files = os.listdir(self.definitions_path)
             self.console = Console()
         except Exception as err:
-            raise FilePathError(definitions_path, resources_path) from err
+            raise FileError(definitions_path, resources_path) from err
 
     def clean_env_vars(self, string):
         """Make sure environemnt values are of a correct type."""
@@ -128,7 +128,7 @@ class Utils:
                 with open(file_path,"rb") as f:
                     definition = tomllib.load(f)
             except Exception as err:
-                raise FilePathError(path=file_path) from err
+                raise FileError(path=file_path) from err
 
             if definition:
                 # Get the resource name from the definition dictionary
@@ -217,7 +217,7 @@ class Utils:
                 db_sys_config = tomllib.load(f)
                 db_sys_engine = db_sys_config.get(database_system, {}).get("engine", {})
         except FileNotFoundError as err:
-            raise FilePathError(self.resources_path) from err
+            raise FileError(self.resources_path) from err
 
         # Extract URL and connect_args separately
         url = db_sys_engine.get("sqlalchemy.url")

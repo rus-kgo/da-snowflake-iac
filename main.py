@@ -10,7 +10,7 @@ import os
 import tomllib
 
 from utils import Utils
-from errors import TemplateFileError, FilePathError
+from errors import TemplateFileError, FileError
 from drift import Drift
 from rich.console import Console
 from rich.syntax import Syntax
@@ -100,7 +100,7 @@ def run(config: InputConfig) -> None:  # noqa: PLR0912, PLR0915
             db_sys_config = tomllib.load(f)
             db_sys_resources = db_sys_config[config.database_system]["resources"]
     except FileNotFoundError as err:
-        raise FilePathError(config.resources_path) from err
+        raise FileError(config.resources_path) from err
 
     # Print out the map planning, excecute if not a dry-run.
     for i in sorted_map:
@@ -112,7 +112,7 @@ def run(config: InputConfig) -> None:  # noqa: PLR0912, PLR0915
             with open(file_path, "rb") as f:
                 definition = tomllib.load(f)
         except FileNotFoundError as err :
-            raise FilePathError(path=file_path, resource_type=resource_type) from err
+            raise FileError(path=file_path, resource_type=resource_type) from err
 
         try:
             for rsc in definition[resource_type]:
@@ -204,7 +204,7 @@ def main():
     try:
         cfg = parse_env()
         run(cfg)
-    except (TemplateFileError, FilePathError) as e:
+    except (TemplateFileError, FileError) as e:
         Console().print(f"[bold red3]Configuration error:[/bold red3] {e}")
         raise
     except Exception:
