@@ -1,0 +1,8 @@
+[[notification_integration]]
+name = "example_notification_integration"
+enabled = true
+default_recipients = [ "<email_address>", "<email_address>",]
+default_subject = "<subject_line>"
+comment = "This is a notification integration comment"
+object_id_tag = "12345abc-def6-7890-ghij-klmn98765opq"
+

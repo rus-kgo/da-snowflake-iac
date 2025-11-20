@@ -1,9 +1,0 @@
-pyyaml
-uuid
-jinja2 
-pandas
-sqlalchemy 
-psycopg2-binary 
-snowflake-sqlalchemy 
-cryptography 
-cx_Oracle

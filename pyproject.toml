@@ -1,5 +1,54 @@
 [tool.ruff]
-extend-select = ["C4", "SIM", "UP", "N", "D", "FBT", "COM", "T10", "ICN", "LOG", "G", "Q", "RET", "SLF", "TID", "TC", "ARG", "TRY", "FLY"]
-ignore = []
+# Target the latest stable Python (PEP 695/703 ready)
+target-version = "py314"
+
+# Select common rule sets aligned with PEP 8, PEP 257, and type hinting conventions.
+# (Includes many standard best practices recommended by the Python community.)
+select = [
+  "E",   # pycodestyle errors (PEP 8)
+  "W",   # pycodestyle warnings (PEP 8)
+  "F",   # pyflakes — logical errors
+  "C4",  # flake8-comprehensions — cleaner comprehensions
+  "SIM", # flake8-simplify — simpler code constructs
+  "UP",  # pyupgrade — modern syntax for newer Python versions
+  "N",   # pep8-naming — naming conventions (PEP 8)
+  "D",   # pydocstyle — docstring conventions (PEP 257)
+  "FBT", # flake8-boolean-trap — boolean argument traps
+  "COM", # flake8-commas — proper comma placement
+  "T10", # flake8-debugger — prevent use of print/debugger
+  "ICN", # import conventions
+  "LOG", # logging practices
+  "G",   # logging format strings
+  "Q",   # flake8-quotes — consistent quotes
+  "RET", # return statement best practices
+  "SLF", # self/usages checks
+  "TID", # tidy imports
+  "TC",  # type-checking-related rules
+  "ARG", # unused or shadowed arguments
+  "TRY", # exception handling best practices
+  "FLY", # future annotations and similar
+  "B",   # flake8-bugbear — common pitfalls
+  "A",   # flake8-builtins — avoid shadowing builtins
+  "PL",  # pylint subset (optional)
+]
+
+# Rules to ignore globally (fine-tune for your project)
+ignore = [
+  "D203",  # one-blank-line-before-class (conflicts with D211)
+  "D213",  # multi-line docstring summary in second line
+  "E501",  # line length (handled by formatter like Black)
+]
+
+# Automatically show suggested fixes in CLI output
 show-fixes = true
-target-version = "py311"
+
+# Optional: configure docstring and quote preferences for consistency
+[tool.ruff.pydocstyle]
+convention = "google"  # Alternatives: "numpy" or "pep257"
+
+[tool.ruff.format]
+quote-style = "double"        # consistent with PEP 8
+indent-style = "space"
+line-ending = "lf"
+docstring-code-format = true
+skip-magic-trailing-comma = false

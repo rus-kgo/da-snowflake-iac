@@ -6,22 +6,15 @@ This module provides:
 - to_str: function for string input vars that might be empty or null;
 """
 
-import yaml 
 import os
-import re
-import json
 import tomllib
 
 from utils import Utils
-from errors import DefinitionKeyError, TemplateFileError, FilePathError
-from drift import ObjectDriftCheck
-
-RESET = "\033[0m"
-RED = "\033[31m"
-GREEN = "\033[32m"
-BRIGHT_GREEN = "\033[92m"
-YELLOW = "\033[33m"
-CYAN = "\033[36m"
+from errors import TemplateFileError, FilePathError
+from drift import Drift
+from rich.console import Console
+from rich.syntax import Syntax
+from dataclasses import dataclass
 
 
 def str_to_bool(s: str) -> bool:
@@ -31,139 +24,191 @@ def str_to_bool(s: str) -> bool:
         raise ValueError(f"Invalid value for boolean: {s}")  # noqa: TRY003
     return s == "true"
 
+
 def to_str(s: str | None) -> str | None:
     """Make sure it a string, return None empty."""
-    if s is None or s == "None" or s == "":
+    if s is None or s in {"None", ""}:
         return None
     return s
+
+@dataclass
+class InputConfig:
+    """Inputs from the environement."""
+    workspace: str
+    database_system: str
+    definitions_path: str | None
+    resources_path: str | None
+    dry_run: bool
+    run_mode: str
+
+def parse_env() -> InputConfig:
+    """Read and normalize inputs from the environment."""
+    try:
+        workspace = os.environ["GITHUB_WORKSPACE"]
+        database_system = os.environ["INPUT_DATABASE-SYSTEM"]
+    except KeyError as e:
+        raise ValueError(f"Missing environment variable: {e}") from e  # noqa: TRY003
+
+    definitions_path = to_str(
+        os.environ.get(
+            "INPUT_DEFINITIONS-PATH",
+            "/definitions",
+            ),
+        )
+    resources_path = to_str(
+        os.environ.get(
+            "INPUT_RESOURCES-PATH",
+            "/sqliac/resources.toml",
+            ),
+        )
+
+    dry_run = str_to_bool(os.environ.get("INPUT_DRY-RUN", "false"))
+    run_mode = os.environ.get("INPUT_RUN-MODE", "default")
+    return InputConfig(
+        workspace=workspace,
+        database_system=database_system,
+        definitions_path=definitions_path,
+        resources_path=resources_path,
+        dry_run=dry_run,
+        run_mode=run_mode,
+    )
+
+def run(config: InputConfig) -> None:  # noqa: PLR0912, PLR0915
+    """Orchestrate the pipeline."""
+    definitions_path = f"{config.workspace}{config.definitions_path}"
+
+    utils = Utils(
+        definitions_path=definitions_path,
+        resources_path=config.resources_path,
+    )
+
+    # Map the dependencies of all the definitions in the yaml files
+    d_map:dict = utils.dependencies_map()
+
+    # Do topographic sorting of the dependecies
+    sorted_map:list[str] = utils.dependencies_sort(d_map)
+
+    # Establish the connection
+    conn = utils.create_db_sys_connection(database_system=config.database_system)
+
+    # Initate drift class to compare object states
+    drift = Drift(conn=conn)
+
+    # Load all resources
+    try:
+        with open(config.resources_path, "rb") as f:
+            db_sys_config = tomllib.load(f)
+            db_sys_resources = db_sys_config[config.database_system]["resources"]
+    except FileNotFoundError as err:
+        raise FilePathError(config.resources_path) from err
+
+    # Print out the map planning, excecute if not a dry-run.
+    for i in sorted_map:
+        resource_type, resource_name = i.split("::")
+
+        file_path = os.path.join(definitions_path, f"{resource_type}.toml")
+
+        try:
+            with open(file_path, "rb") as f:
+                definition = tomllib.load(f)
+        except FileNotFoundError as err :
+            raise FilePathError(path=file_path, resource_type=resource_type) from err
+
+        try:
+            for rsc in definition[resource_type]:
+                # This is for benefit of following the sorter order
+                if rsc["name"] == resource_name:
+
+                    rsc_state_query = utils.render_templates(
+                        template=db_sys_resources[rsc]["state_query"],
+                        resource_name=resource_name,
+                    )
+
+                    rsc_drift = drift.resource_state(
+                        definition=rsc,
+                        state_query=rsc_state_query,
+                        name=resource_name,
+                        )
+
+                    if config.run_mode.lower() == "create-or-update":
+                        # If there is no drift, then it is a new object.
+                        if rsc_drift["iac_action"]=="create":
+                            sql = utils.render_templates(
+                                template=db_sys_resources[rsc]["template"],
+                                definition=rsc_drift["definition"],
+                                name=resource_name,
+                                iac_action=db_sys_resources[rsc]["iac_action"]["create"],
+                            )
+
+                            Console().print(f"\n[bold green3] + Create '{rsc}'[/bold green3]")
+                            pretty_sql = Syntax(sql, "sql", theme="monokai", line_numbers=False)
+                            Console().print(pretty_sql)
+
+                            if not config.dry_run:
+                                utils.execute_rendered_sql_template(
+                                    connection=conn,
+                                    sql=sql,
+                                )
+
+                        # Do nothing if the the object has not drifted, definition and the state are the same.
+                        elif rsc_drift["iac_action"]=="no action":
+                            continue
+
+                        # If the object drifted, alter the properties of the object.
+                        elif rsc_drift["iac_action"]=="alter":
+                            sql = utils.render_templates(
+                                template=db_sys_resources[rsc]["template"],
+                                definition=rsc_drift["definition"],
+                                name=resource_name,
+                                iac_action=db_sys_resources[rsc]["iac_action"]["alter"],
+                            )
+
+                            Console().print(f"\n[bold sandy_brown] ~ Alter '{rsc}'[/bold sandy_brown]")
+                            pretty_sql = Syntax(sql, "sql", theme="monokai", line_numbers=False)
+                            Console().print(pretty_sql)
+
+                            if not config.dry_run:
+                                utils.execute_rendered_sql_template(
+                                    connection=conn,
+                                    sql=sql,
+                                )
+
+                    elif config.run_mode.lower() == "destroy":
+                        sql = utils.render_templates(
+                            template=db_sys_resources[rsc]["template"],
+                            definition=rsc_drift["definition"],
+                            name=resource_name,
+                            iac_action=db_sys_resources[rsc]["iac_action"]["drop"],
+                        )
+
+                        Console().print(f"\n[bold red3] - Drop '{rsc}'[/bold red3]")
+                        pretty_sql = Syntax(sql, "sql", theme="monokai", line_numbers=False)
+                        Console().print(pretty_sql)
+
+                        if not config.dry_run:
+                            utils.execute_rendered_sql_template(
+                                connection=conn,
+                                sql=sql,
+                            )
+
+        except Exception as err:
+            conn.close()
+            raise TemplateFileError(resource_name, config.resources_path, err) from err
+    conn.close()
+
 
 
 def main():
     """Entry point of the pipeline."""
     try:
-        workspace = os.environ["GITHUB_WORKSPACE"]
-
-        # Inputs
-        database_system = os.environ["INPUT_DATABASE-SYSTEM"]
-        definitions_path = os.environ.get("INPUT_DEFINITIONS-PATH")
-        resources_path = os.environ.get("INPUT_RESOURCES-PATH")
-        dry_run = str_to_bool(os.environ["INPUT_DRY-RUN"])
-        run_mode = os.environ["INPUT_RUN-MODE"]
-
-    except KeyError as e:
-        raise ValueError(f"Missing environment variable: {e}") from e  # noqa: TRY003
-
-
-    definitions_path = f"{workspace}{definitions_path}"
-
-    utils = Utils(
-        definitions_path=definitions_path,
-        resources_path=resources_path,
-    )
-
-    # Map the dependencies of all the definitions in the yaml files
-    map = utils.dependencies_map()
-
-    # Do topographic sorting of the dependecies
-    sorted_map = utils.dependencies_sort(map)["map"]
-
-    # Establish the connection
-    conn = utils.create_db_sys_connection(database_system=database_system)
-
-    # Initate drift class to compare object states
-    drift = ObjectDriftCheck(conn=conn)
-
-    # Load all resources
-    try:
-        with open(resources_path, "rb") as f:
-            db_sys_config = tomllib.load(f)
-            db_sys_resources = db_sys_config[database_system]["resources"]
-    except FileNotFoundError:
-        raise FilePathError(resources_path)
-
-
-    # Print out the map planning, excecute if not a dry-run.
-    for i in sorted_map:
-        object, object_name = i.split("::")
-
-        file_path = os.path.join(definitions_path, f"{object}.toml")
-
-        try:
-            with open(file_path, "rb") as f:
-                definition = tomllib.load(f)
-        except FileNotFoundError:
-            raise DefinitionKeyError(object) 
-
-        try:
-            for obj_def in definition[object]:
-                # This is for benefit of following the sorter order
-                if obj_def["name"] == object_name:
-
-                    # Check if the object defintion has drifted from it's state in the database.
-                    obj_drift = drift.object_state(object_definition=obj_def)
-
-                    if run_mode.lower() == "create-or-update":
-                        # If there is no drift, then it is a new object.
-                        if not obj_drift:
-                            template = db_sys_resources[object]["template"]
-                            iac_action = db_sys_resources[object]["iac_action"]
-                            sql = utils.render_templates(
-                                    template=template,
-                                    definition=obj_def,
-                                    obj_name=object_name,
-                                    iac_action=iac_action["create"],
-                                    )
-
-                            print(f"\n{GREEN} + Create '{object}'{RESET}")
-                            print(sql)
-
-                            if not dry_run:
-                                print(utils.execute_rendered_sql_template(
-                                    connection=conn,
-                                    object=object,
-                                    object_name=object_name,
-                                    sql=sql,
-                                ))
-
-                        # Do nothing if the the object has not drifted, definition and the state are the same.
-                        elif len(obj_drift) == 0:
-                            continue
-
-
-                        # If the object drifted, alter the properties of the object.
-                        elif obj_drift["name"] == obj_def["name"]:
-
-                            sql = utils.render_templates(
-                                    template=template,
-                                    definition=obj_def,
-                                    obj_name=object_name,
-                                    iac_action=iac_action["alter"],
-                                    )
-
-                            print(f"\n{YELLOW} ~ Alter '{object}'{RESET}")
-                            print(sql)
-
-                            if not dry_run:
-                                utils.execute_rendered_sql_template(connection=conn, definition=obj_def, sql=sql)
-
-                    elif run_mode.lower() == "destroy":
-                        sql = utils.render_templates(
-                                template=template,
-                                definition=obj_def,
-                                obj_name=object_name,
-                                iac_action=iac_action["drop"],
-                                )
-
-                        print(f"\n{RED} - Drop '{object}'{RESET}")
-                        print(sql)
-
-                        if not dry_run:
-                                utils.execute_rendered_sql_template(connection=conn, definition=obj_def, sql=sql)
-
-        except Exception as e:
-            conn.close()
-            raise TemplateFileError(object, folder=resources_path, error=e)
-    conn.close()
+        cfg = parse_env()
+        run(cfg)
+    except (TemplateFileError, FilePathError) as e:
+        Console().print(f"[bold red3]Configuration error:[/bold red3] {e}")
+        raise
+    except Exception:
+        Console().print("[bold red3]Unexpected error[/bold red3]")
+        raise
 
 if __name__ == "__main__":
     main()

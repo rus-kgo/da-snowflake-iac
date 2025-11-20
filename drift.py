@@ -1,135 +1,216 @@
 """State comparison module.
 
-This module performs the checks of snowflake objects drift.
+This module performs the checks of sql database resources drift.
 Drift is the term for when the real-world state of your infrastructure differs from the state defined in your configuration.
 """
 
-import pandas as pd
+from __future__ import annotations
+
 import json
-from typing import Literal, Any
+from typing import Any, TYPE_CHECKING
+from dataclasses import dataclass, field
+from errors import SQLExecutionError, DefinitionKeyError
+from collections.abc import MutableMapping, MutableSequence
 
+if TYPE_CHECKING:
+    from sqlalchemy import Connection
 
+@dataclass
+class CheckResult:
+    """Result of a drift check.
 
-class ObjectDriftCheck:
-    """Drift check of the snowflake objects."""
+    Attributes:
+        match: True if the definition matches the observed state.
+        diff: Details of differences when match is False, or None if no differences.
+    """
+    match: bool
+    diff: dict | set = field(default=None)
 
-    def __init__(self, conn:object) -> dict:
+class Drift:
+    """Drift check of the database resource."""
+
+    def __init__(self, conn:Connection) -> dict:
         """Initialize the comparator with Snowflake connection parameters and YAML definitions file path.
-        
-        :param conn: Dictionary of Snowflake connection parameters.
+
+        Args:
+            conn(Connection): SQL database connection.
         """
         self.conn = conn
 
+    def __clean_value(self, value:Any) -> Any:
+        """Clean and normalize a value."""
+        # Handle None
+        if value is None:
+            return value
 
-    def query_fetch_to_df(self, query:str) -> pd.DataFrame:
-        """Execute an asynchronous query in Snowflake and fetch results."""
-        if not self.conn:
-            raise ConnectionError("No active Snowflake connection.")  # noqa: TRY003
+        # If already a boolean, keep it
+        if isinstance(value, bool):
+            return value
 
-        cursor = self.conn.cursor()
+        # If it's a string
+        if isinstance(value, str):
+            string_value = value.upper().strip()
 
+            # Check for boolean strings
+            if string_value == "TRUE":
+                return True
+            if string_value == "FALSE":
+                return False
+
+            try:
+                # Try int first
+                value = int(string_value)
+            except ValueError:
+                try:
+                    # Try float
+                    value = float(string_value)
+                except ValueError:
+                    # Not a number, return string
+                    return string_value
+
+        # Default: return as-is
+        return value
+
+    def _normalize_definition(self, definition:dict) -> dict:
+        """Prepare the defined resource for comparison."""
+        clean_rcs_def = {}
+        for key, value in definition.items():
+
+            if isinstance(value, list):
+                if all(isinstance(item, str) for item in value):
+                    clean_value = [self.__clean_value(i) for i in value]
+
+                elif all(isinstance(item, dict) for item in value):
+                    clean_value = [
+                        {k.lower().strip():self.__clean_value(v) for k,v in d.items()}
+                        for d in value
+                    ]
+            else:
+                clean_value = self.__clean_value(value)
+
+            clean_rcs_def[key.lower().strip()] = clean_value
+
+        return clean_rcs_def
+
+    def _fetch_state_query(self, query:str) -> dict:
+        """Fetch the resource state query as a dictionary."""
         try:
-            cursor.execute(query)
-            # Get the columns name of the query output
-            cols = cursor.description
-            df_cols = pd.DataFrame(cols)
-            list_cols = df_cols["name"].to_list()
-
-            # Get the query output
-            query_output = cursor.fetchall()
-
-            # Transform the output into a df
-            df = pd.DataFrame(query_output, columns=list_cols)
-
-        except Exception as e:
-            print(f"Error executing query: {query}\n{e}")
+            result = self.conn.exec_driver_sql(query).scalar_one_or_none()
+            if result:
+                return json.loads(result)
+        except Exception as err:
+            raise SQLExecutionError(error=err) from err
+        else:
             return None
-        
-        return df
-        
 
-    def object_state(
-            self, 
-            object_id:str, 
-            object_definition:dict, 
-            sf_object:str,
-            nested_field:str|None,
-            describe_object:Literal["Yes","No"] = "Yes",
+
+    def __flatten_dict_gen(self, d:MutableMapping, parent_key, sep):
+        for k, v in d.items():
+            new_key = parent_key + sep + k if parent_key else k
+            if isinstance(v, MutableMapping):
+                yield from self._flatten_dict(v, new_key, sep=sep).items()
+            elif isinstance(v, MutableSequence):
+                for i in v:
+                    if isinstance(i,MutableMapping):
+                        yield from self._flatten_dict(i, new_key, sep=sep).items()
+            else:
+                yield new_key, v
+
+    def _flatten_dict(self, d:MutableMapping, parent_key: str = "", sep: str = "::"):
+        return dict(self.__flatten_dict_gen(d, parent_key, sep))
+
+
+    def _check_keys(self, definition:dict, state:dict, name:str) -> CheckResult:
+        """Compare the definition keys."""
+        definition_keys = set(self._flatten_dict(d=definition).keys())
+        state_keys = set(self._flatten_dict(d=state).keys())
+
+        # Symmetric difference (elements in A or B but not both)
+        symetric_diff = sorted(definition_keys ^ state_keys)
+
+        if symetric_diff:
+            raise DefinitionKeyError(keys=symetric_diff, name=name)
+
+        return CheckResult(match=True)
+
+
+    def _check_values(self, state:dict, definition:dict) -> CheckResult:
+
+        if definition == state:
+            return CheckResult(match=True)
+
+        result = {}
+        # Iterate through definition keys (what we expect)
+        for key, defn_value in definition.items():
+            state_value = state.get(key)
+
+            # Handle dictionaries recursively
+            if isinstance(defn_value, dict) and isinstance(state_value, dict):
+                nested_result = self._check_values(state_value, defn_value).diff
+                if nested_result:  # Only include if there are mismatches
+                    result[key] = nested_result
+
+            # Handle lists recursively
+            elif isinstance(defn_value, list) and isinstance(state_value, list):
+                list_result = []
+                # Compare items
+                for i in defn_value:
+                    if i not in state_value:
+                        list_result.append(i)
+                    if list_result:
+                        result[key] = list_result
+
+            # Handle primitive values
+            elif defn_value != state_value:
+                # Only include if definition value is not empty
+                if defn_value != "" and defn_value is not None:
+                    result[key] = defn_value
+
+        return CheckResult(match=False, diff=result)
+
+
+    def resource_state(
+            self,
+            definition:dict,
+            state_query:str,
+            name:str,
             ) -> dict:
-        """Compare the state of an object in Snowflake with its YAML definition.
+        """Compare the resource definition with the resource state."""
+        rsc_def = self._normalize_definition(definition)
 
-        :param object_id: Snowflake object_id taken from the yaml definition file.
-        :param object_definition: Swnowflake object definition stored in the yaml file.
-        :param describe_object: For some objects the DESCRIBE output does not include the object definition. Instead, only SHOW is used.
-        :return: Comparison result as a dictionary.
-        """
-        show_output = self.query_fetch_to_df(f"show {sf_object}s")
+        rsc_state = self._fetch_state_query(state_query)
 
-        # Get the name of the object corresponding to the id
-        object_name = show_output[show_output["comment"].str.contains(object_id)]["name"]
+        # If the resource does not exists in the database
+        if not rsc_state:
+            return {
+                "iac_action":"create",
+                "definition":rsc_def,
+            }
 
-        # Return if the the object does not exists in Snowflake
-        if len(object_name) == 0:
-            return None
-        
-        object_name= object_name.values[0]
+        # If the resource exists and the definition keys match the state keys
+        rsc_state = self._normalize_definition(rsc_state)
+        keys_check = self._check_keys(
+            definition=rsc_def,
+            state=rsc_state,
+            name=name,
+            )
 
-        # Pivot to match the yaml definition
-        df_show = show_output[show_output["comment"].str.contains(object_id)].melt(var_name="property",value_name="property_value")
+        if keys_check.match:
+            # Check the value difference
+            values_check:CheckResult = self._check_values(
+                definition=rsc_def,
+                state=rsc_state,
+                name=name,
+                )
 
-        if describe_object == "Yes":
-            query = f"describe {sf_object} like {object_name}"
+            if not values_check.match:
+                return {
+                    "iac_action":"alter",
+                    "definition":values_check.diff,
+                }
 
-            # Get description of the object
-            df_desc = self.query_fetch_to_df(query=query)
+        return {
+            "iac_action":"no-action",
+            "definition":None,
+        }
 
-            # Prefix describe columns if the object has nested field
-            if nested_field:
-                df_desc.columns = [f"{nested_field}_" + col for col in df_desc.columns]
-                # Pivot for combination
-                df_desc = df_desc.melt(var_name="property", value_vars="property_value")
-
-            # Select Only necessary Columns
-            df_desc = df_desc[["property", "property_value"]]
-            # Combine show and desc outputs
-            sf_df = pd.concat([df_desc, df_show], ignore_index=True, join="inner").drop_duplicates()
-        else: 
-            sf_df = df_show
-
-        # Transform the comment json string into a dictionory
-        comment = show_output[show_output["comment"].str.contains(object_id)]["comment"].values[0]
-        comment = json.loads(comment)
-
-        # Create new rows from the fields in the comments json string
-        comment_rows = pd.DataFrame(comment.items(), columns=["property", "property_value"])
-
-        # Filter out the comments json string containing a dict as we will add it to df separetely as new rows
-        sf_df = sf_df[sf_df["property"] != "comment"]
-
-        # Add new rows to the dataframe
-        sf_df = pd.concat([sf_df, comment_rows], ignore_index=True)
-
-        # Convert the defintion dict into a df matching the snowflake output
-        d_df = self._flatten_nested_dict(object_definition, nested_field=nested_field)
-
-        # Filter out properties specific to the pipeline project
-        d_df = d_df[~d_df["property"].isin(["depends_on", "wait_time"])]
-
-        # Set index to Properties
-        sf_df = sf_df.set_index("property")
-        d_df = d_df.set_index("property")
-
-        # Set all string values to lower case before comparison as it is case sensetive
-        sf_df = sf_df.map(lambda x : x.lower() if isinstance(x, str) else x)
-        d_df = d_df.map(lambda x : x.lower() if isinstance(x, str) else x)
-
-        # Ensure both DataFrames have the same index
-        sf_df, d_df = sf_df.align(d_df, join="inner")
-
-        # Use compare to find differences
-        comparison = d_df.compare(sf_df, keep_shape=False, keep_equal=False, result_names=("new","old"))
-
-        try:
-            return comparison["property_value"]["old"].to_dict()
-        except KeyError:
-            return comparison.to_dict()

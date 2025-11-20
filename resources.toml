@@ -16,7 +16,7 @@ sqlalchemy.connect_args.private_key_passphrase = ""
 iac_action.create = "CREATE"
 iac_action.alter = ""
 iac_action.drop = "DROP"
-status_query = '''
+state_query = '''
 SHOW ROLES LIKE {{ name }};
 
 SELECT 
@@ -39,7 +39,7 @@ template = '''
 iac_action.create = "CREATE OR ALTER"
 iac_action.alter = "CREATE OR ALTER"
 iac_action.drop = "DROP"
-status_query = '''
+state_query = '''
 SHOW DATABASE ROLES LIKE {{ name }};
 SELECT 
 NAME,
@@ -61,7 +61,7 @@ template = '''
 iac_action.create = "CREATE OR ALTER"
 iac_action.alter = "CREATE OR ALTER"
 iac_action.drop = "DROP"
-status_query = ""
+state_query = ""
 template = '''
 {% if iac_action.upper() == 'DROP' %}
 {{ iac_action }} VIEW {{ name }};
@@ -90,7 +90,7 @@ AS {{ as_ }};
 '''
 
 [snowflake.resources.grant]
-status_query = ""
+state_query = ""
 iac_action.create = "GRANT"
 iac_action.alter = ""
 iac_action.drop = "REVOKE"
@@ -107,7 +107,7 @@ FROM ROLE {{ to_role }};
 {% endif -%}
 '''
 [swnoflake.resources.security_integration]
-status_query = ""
+state_query = ""
 iac_action.create = "CREATE"
 iac_action.alter = "ALTER"
 iac_action.drop = "DROP"
@@ -143,26 +143,33 @@ COMMENT = '{"comment":"{{ comment }}", "object_id_tag": "{{ object_id_tag }}"}';
 "sqlalchemy.connect_args".timeout = 1 
 
 [sqlite.resources.table]
-status_query = """
-WITH tbl AS (
-    SELECT '{{name}}' AS name
-    WHERE EXISTS (
-        SELECT 1
-        FROM sqlite_master
-        WHERE type = 'table'
-          AND name = '{{name}}'
-    )
-),
-cols AS (
-    SELECT '{{name}}' AS name,
-           GROUP_CONCAT(name, ',') AS col_list
-    FROM pragma_table_info('{{name}}')
+state_query = """
+WITH table_info AS (
+    SELECT 
+        m.name as table_name,
+        m.sql as table_definition,
+        json_group_array(
+            json_object(
+                'name', p.name,
+                'type', p.type,
+                'nullable', CASE WHEN p."notnull" = 0 THEN 1 ELSE 0 END,
+                'default', p."dflt_value"
+            )
+        ) as columns
+    FROM sqlite_master m
+    LEFT JOIN pragma_table_info('actors') p
+    WHERE m.type = 'table' 
+    AND m.name = 'actors'
+    GROUP BY m.name
 )
-SELECT 'name' AS property, tbl.name AS value
-FROM tbl
-UNION ALL
-SELECT 'column', cols.col_list AS value
-FROM cols;
+SELECT json_object(
+    'name', table_name,
+    'database', 'main',
+    'schema', 'main',
+    'owner', 'sqlite',
+    'columns', json(columns)
+) as table_metadata
+FROM table_info;
 """
 iac_action.create = "CREATE"
 iac_action.alter = "ALTER"
