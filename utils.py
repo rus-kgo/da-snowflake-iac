@@ -124,8 +124,11 @@ class Utils:
         for file in self.definitions_files:
 
             file_path = os.path.join(self.definitions_path, file)
-            with open(file_path,"rb") as f:
-                definition = tomllib.load(f)
+            try:
+                with open(file_path,"rb") as f:
+                    definition = tomllib.load(f)
+            except Exception as err:
+                raise FilePathError(path=file_path) from err
 
             if definition:
                 # Get the resource name from the definition dictionary
