@@ -60,7 +60,7 @@ class LocalTest:
             # Filter working on resources
             if object in resources:
 
-                file_path = os.path.join("definitions", f"{object}.yml")
+                file_path = os.path.join("definitions", f"{object}.toml")
 
                 try:
                     with open(file_path) as f:
@@ -142,7 +142,7 @@ class LocalTest:
 
 
 
-if __name__ == "__main__":
-    local_test = LocalTest()
-    resources = ["security_integraion"]
-    local_test.test_resources(resources)
+# if __name__ == "__main__":
+#     local_test = LocalTest()
+#     resources = ["security_integraion"]
+#     local_test.test_resources(resources)
