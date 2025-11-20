@@ -124,7 +124,7 @@ class Utils:
         for file in self.definitions_files:
 
             file_path = os.path.join(self.definitions_path, file)
-            with open(file_path) as f:
+            with open(file_path,"rb") as f:
                 definition = tomllib.load(f)
 
             if definition:
