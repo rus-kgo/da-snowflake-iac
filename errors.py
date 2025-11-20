@@ -24,11 +24,11 @@ class FileError(Exception):
             path (str, optional): The file path that caused the error.
             resource_type (str, optional): The type of resource related to the file path.
         """
-        if path:
-            message = f"Not a valid file path: '{path}'"
-        elif resource_type and path:
+        if resource_type and path:
             message = f"Not a valid file for the resource: '{resource_type}' " \
                 f"In the file path {path}"
+        elif path:
+            message = f"Not a valid file path: '{path}'"
         super().__init__(message)
 
 class TemplateFileError(Exception):

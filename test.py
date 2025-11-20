@@ -142,7 +142,7 @@ class LocalTest:
 
 
 
-# if __name__ == "__main__":
-#     local_test = LocalTest()
-#     resources = ["security_integraion"]
-#     local_test.test_resources(resources)
+if __name__ == "__main__":
+    local_test = LocalTest()
+    resources = ["security_integraion"]
+    local_test.test_resources(resources)
