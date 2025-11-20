@@ -4,7 +4,7 @@ description: 'SQL database system infrastructure as code.'
 
 inputs:
   run-mode:
-    description: 'Run mode determines which iac_actions can be performed. Valid options: `create-or-update`, `destroy`.
+    description: 'Run mode determines which iac_actions can be performed. Valid options: `create-or-update`, `destroy`.'
     required: true
     default: 'create-or-update'
   definitions-path:
