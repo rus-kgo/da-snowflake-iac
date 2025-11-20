@@ -128,7 +128,7 @@ class Utils:
                 with open(file_path,"rb") as f:
                     definition = tomllib.load(f)
             except Exception as err:
-                raise FileError(path=file_path) from err
+                raise FileError(path=file_path, resource_type=file) from err
 
             if definition:
                 # Get the resource name from the definition dictionary
