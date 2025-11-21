@@ -73,8 +73,14 @@ class Drift:
 
     def _normalize_definition(self, definition:dict) -> dict:
         """Prepare the defined resource for comparison."""
+        # Remove pipeline specific keys
+        rcs_def = {
+            k:v for k,v in definition.items()
+            if k not in {"depends_on", "wait_time"}
+            }
+
         clean_rcs_def = {}
-        for key, value in definition.items():
+        for key, value in rcs_def.items():
 
             if isinstance(value, list):
                 if all(isinstance(item, str) for item in value):
