@@ -481,7 +481,7 @@ AS {{ as_ }};
 
 
 [sqlite.engine]
-"sqlalchemy.url" = "sqlite:///"
+"sqlalchemy.url" = "sqlite:///foo.db"
 "sqlalchemy.connect_args".timeout = 1 
 
 [sqlite.resources.table]
@@ -532,3 +532,18 @@ DROP TABLE {{ name }};
 
 {% endif -%}
 """
+[sqlite.resources.table.definition]
+name = "example_table"
+database = "example_database"
+schema = "example_schema"
+owner = "SYSADMIN"
+comment = "This is a table comment"
+wait_time = 0
+[[sqlite.resources.table.definition.columns]]
+name = "column1"
+type = "VARCHAR"
+nullable = true
+comment = "Column 1 description"
+
+[sqlite.resources.table.definition.depends_on]
+    role = ["some_role"]
