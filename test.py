@@ -1,148 +1,105 @@
-"""Locar run test module.
+from utils import Utils  # noqa: D100
+import tomllib
+from rich.console import Console
+from rich.syntax import Syntax
 
-This module loads the enironemnt variables from .env file an runs the project from main().
-The .env file should have the following variables.
-
-GITHUB_WORKSPACE = ""
-INPUT_DEFINITIONS-PATH = "definitions"
-INPUT_RESOURCES-PATH = "resources"
-INPUT_DRY-RUN = "True"
-INPUT_RUN-MODE= "create-or-update"
-INPUT_DATABASE= "some_database"
-INPUT_SCHEMA= "some_schema"
-SNOWFLAKE_USER= "some_user"
-SNOWFLAKE_ACCOUNT= "some_account"
-SNOWFLAKE_WAREHOUSE= "some_warehouse"
-SNOWFLAKE_APP_CLIENT_ID = ""
-SNOWFLAKE_APP_CLIENT_SECRET = ""
-SNOWFLAKE_APP_TENANT_ID = ""
-SNOWFLAKE_APP_SCOPE = ""
-
-"""
-import os
-import yaml
-from dotenv import load_dotenv
-from icecream import ic
-
-from errors import DefinitionKeyError, TemplateFileError
-from main import main
-from utils import Utils
+from sqlglot import parse_one
+from sqlglot.errors import ParseError
 
 class LocalTest:
-    """Local test class to test the resources and full local run."""
+    """Local test class to test the resources templates."""
+    def __init__(
+            self,
+            db_system:str,
+            resource_type:str,
+            resource_name:str,
+            ):
+        """Initialize LocalTest with database system, resource type, and resource name."""
+        self.db_system = db_system
+        self.resource_type = resource_type
+        self.resource_name = resource_name
 
-    def local_run(self):
-        """Load environemnt variables from .env file and full run."""
-        load_dotenv()
-        main()
+        with open("resources.toml","rb") as f:
+            config = tomllib.load(f)
+            self.db_sys_resources = config[self.db_system]["resources"]
 
-    def test_resources(self, resources:list):
-        """Load resources and definitions and print out the output for testgin."""
+
+    def test_template_query(self,iac_action:str):
+        """Load resource and print out the output for testing."""
         utils = Utils(
-            resources_folder="resources",
-            definitions_folder="definitions",
+            resources_path="resources.toml",
+            definitions_path="",
         )
 
-        # First check if all definitions have their tags, assign a tag if not
-        # utils.assign_pipeline_tag_id()
+        sql = utils.render_templates(
+            template=self.db_sys_resources[self.resource_type]["template"],
+            definition=self.db_sys_resources[self.resource_type]["definition"],
+            name=self.resource_name,
+            iac_action=iac_action,
+        )
 
-        # Map the dependencies of all the definitions in the yaml files
-        map = utils.dependencies_map()
-        ic(map)
+        try:
+            # Parse SQL with databse system dialect
+            parsed = parse_one(sql, read=self.db_system)
 
-        # Do topographic sorting of the dependecies
-        sorted_map = utils.dependencies_sort(map)["map"]
-        ic(sorted_map)
+            # Optionally, regenerate SQL to check completeness
+            regenerated = parsed.sql(dialect=self.db_system)
 
-        for i in sorted_map:
-            object, object_name = i.split("::")
+            print("SQL from definition template:\n")
+            pretty_sql = Syntax(sql, "sql", theme="monokai", line_numbers=False)
+            Console().print(pretty_sql)
 
-            # Filter working on resources
-            if object in resources:
+            print("\nParser re-generated SQL for completness:\n")
+            pretty_sql = Syntax(regenerated, "sql", theme="monokai", line_numbers=False)
+            Console().print(pretty_sql)
 
-                file_path = os.path.join("definitions", f"{object}.toml")
+        except ParseError as e:
+            print(f"SQL Parse Error: {str(e)}")
+        except Exception as e:
+            print(f"Validation Error: {str(e)}")
 
-                try:
-                    with open(file_path) as f:
-                        definition = yaml.safe_load(f)
-                except FileNotFoundError:
-                    raise DefinitionKeyError(object) 
+    def test_status_query(self):
+        """Test the resource status query."""
+        utils = Utils(
+            resources_path="resources.toml",
+            definitions_path="",
+        )
 
-                try:
-                    for d_state in definition[object]:
-                        if d_state["name"] == object_name:
+        sql = utils.render_templates(
+            template=self.db_sys_resources[self.resource_type]["state_query"],
+            name=self.resource_name,
+        )
 
-                            ic("CREATE OR ALTER iac_action")
-                            sql = utils.render_templates(
-                                    template_file=f"{object}.sql",
-                                    definition=d_state,
-                                    iac_action="CREATE OR ALTER",
-                                    )
+        try:
+            # Parse SQL with databse system dialect
+            parsed = parse_one(sql, read=self.db_system)
 
-                            print(sql)
+            # Optionally, regenerate SQL to check completeness
+            regenerated = parsed.sql(dialect=self.db_system)
 
-                            ic("CREATE iac_action")
-                            sql = utils.render_templates(
-                                    template_file=f"{object}.sql",
-                                    definition=d_state,
-                                    iac_action="CREATE",
-                                    )
+            print("SQL from status query template:\n")
+            pretty_sql = Syntax(sql, "sql", theme="monokai", line_numbers=False)
+            Console().print(pretty_sql)
 
-                            print(sql)
+            print("\nParser re-generated SQL for completness:\n")
+            pretty_sql = Syntax(regenerated, "sql", theme="monokai", line_numbers=False)
+            Console().print(pretty_sql)
 
-                            ic("ALTER iac_action where the name of the object differs.")
-                            sql = utils.render_templates(
-                                    template_file=f"{object}.sql",
-                                    definition=d_state,
-                                    iac_action="ALTER",
-                                    new_name=d_state["name"],
-                                    old_name="old_object_name",
-                                    )
+        except ParseError as e:
+            print(f"SQL Parse Error: {str(e)}")
+        except Exception as e:
+            print(f"Validation Error: {str(e)}")
 
-                            print(sql)
-
-                            ic("ALTER iac_action")
-                            sql = utils.render_templates(
-                                    template_file=f"{object}.sql",
-                                    definition=d_state,
-                                    iac_action="ALTER",
-                                    )
-
-                            print(sql)
-
-                            ic("DROP iac_action")
-                            sql = utils.render_templates(
-                                    template_file=f"{object}.sql",
-                                    definition=d_state,
-                                    iac_action="DROP",
-                                    )
-
-                            print(sql)
-
-                            ic("GRANT iac_action")
-                            sql = utils.render_templates(
-                                    template_file=f"{object}.sql",
-                                    definition=d_state,
-                                    iac_action="GRANT",
-                                    )
-
-                            print(sql)
-
-                            ic("REVOKE iac_action")
-                            sql = utils.render_templates(
-                                    template_file=f"{object}.sql",
-                                    definition=d_state,
-                                    iac_action="REVOKE",
-                                    )
-
-                            print(sql)
-
-                except Exception as e:
-                    raise TemplateFileError(object, folder="resources", error=e)
 
 
 
 if __name__ == "__main__":
-    local_test = LocalTest()
-    resources = ["security_integraion"]
-    local_test.test_resources(resources)
+    local_test = LocalTest(
+        resource_name="table_name",
+        resource_type="table",
+        db_system="sqlite",
+    )
+    local_test.test_template_query(
+        iac_action="create",
+    )
+    local_test.test_status_query()

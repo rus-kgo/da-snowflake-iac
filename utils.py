@@ -79,6 +79,17 @@ class Utils:
         """
         try:
             env = Environment()
+            if not definition:
+                rsc_template = env.from_string(template)
+                sql = rsc_template.render(
+                    name=name,
+                )
+                return sqlparse.format(
+                    re.sub(r"\n+", "\n", sql).strip().strip(";"),
+                    reindent=True,
+                    keyword_case="upper",
+                )
+
             # Validate that all keys in the template are present in definition
             parsed_rsc_template = env.parse(template)
             required_vars = meta.find_undeclared_variables(parsed_rsc_template)
