@@ -13,6 +13,7 @@ from cryptography.hazmat.backends import default_backend
 from collections import deque
 from jinja2 import Environment, meta, UndefinedError, TemplateSyntaxError
 from rich.console import Console
+import time
 
 from errors import (
     DefinitionKeyError,
@@ -24,7 +25,7 @@ from errors import (
 
 
 class Utils:
-    """Contains functions designed to generate SQL queries for execution in Snowflake, following the dependency order defined in the YAML files."""
+    """Utility helpers for template rendering, dependency resolution, and database connections."""
 
     def __init__(
         self,
@@ -34,16 +35,15 @@ class Utils:
         """Load the templates environments and list definitions files.
 
         Args:
-            resources_path (str): Path to the folder containing Snowflake resource templates
+            resources_path (str): Path to the folder containing resource templates
                                   (SQL files with Jinja formatting).
-            definitions_path (str): Path to the folder containing Snowflake resource definitions
-                                    (YAML files).
+            definitions_path (str): Path to the folder containing resource definitions
+            console (rich.console.Console): Console instance used for user-facing output.
 
         """
         try:
             self.resources_path = resources_path
             self.definitions_path = definitions_path
-            self.definitions_files = os.listdir(self.definitions_path)
             self.console = Console()
         except Exception as err:
             raise FileError(definitions_path, resources_path) from err
@@ -63,15 +63,15 @@ class Utils:
         template: str,
         definition: dict = None,
         iac_action: str = None,
-        resource_name: str = None,
+        name: str = None,
     ) -> str:
         """Render the Jinja template of the resource.
 
         Args:
             template (str): The resouce sql template to render.
             definition (dict, optional): The definition of the resource.
-            iac_action (str, optional): The type of execution iac_action to perform in Snowflake (e.g., "create", "alter", or "drop").
-            resource_name (str, optional): The name of the resource.
+            iac_action (str, optional): The type of execution iac_action to perform (e.g., "create", "alter", or "drop").
+            name (str, optional): The name of the resource.
 
         Returns:
             str: The rendered SQL template as a string.
@@ -89,7 +89,7 @@ class Utils:
             ]
             if missing_vars:
                 raise TemplateFileError(
-                    resource_name,
+                    name,
                     self.resources_path,
                     f"Definition is missing variables: {missing_vars}",
                 )
@@ -114,14 +114,17 @@ class Utils:
             sql_clean = sql_clean.strip(";")
 
         except (KeyError, TemplateSyntaxError, UndefinedError) as e:
-            raise TemplateFileError(resource_name, self.resources_path, e) from e
+            raise TemplateFileError(name, self.resources_path, e) from e
 
         return sqlparse.format(sql_clean, reindent=True, keyword_case="upper")
 
     def dependencies_map(self) -> dict:
         """Create a topographic depencies map of the resource."""
+        # List all files with resource definitions
+        definitions_files = os.listdir(self.definitions_path)
+
         d_map = {}
-        for file in self.definitions_files:
+        for file in definitions_files:
 
             file_path = os.path.join(self.definitions_path, file)
             try:
@@ -297,12 +300,15 @@ class Utils:
 
     def execute_rendered_sql_template(
         self,
-        conn: Connection,
-        sql: str,
+        conn:Connection,
+        sql:str,
+        wait_time:int|None,
     ) -> None:
         """Execute rendered templates using SQL database connection."""
         try:
             conn.exec_driver_sql(sql)
+            if wait_time:
+                time.sleep(wait_time)
         except Exception as err:
             raise SQLExecutionError(
                 error=err,
