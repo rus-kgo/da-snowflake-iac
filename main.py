@@ -95,6 +95,7 @@ def run(config: InputConfig) -> None:  # noqa: PLR0912, PLR0915
     drift = Drift(conn=conn)
 
     # Load all resources
+    # TODO: separate the load of a resources config with check of nesesary keys
     try:
         with open(config.resources_path, "rb") as f:
             db_sys_config = tomllib.load(f)
@@ -120,8 +121,8 @@ def run(config: InputConfig) -> None:  # noqa: PLR0912, PLR0915
                 if rsc["name"] == resource_name:
 
                     rsc_state_query = utils.render_templates(
-                        template=db_sys_resources[rsc]["state_query"],
-                        resource_name=resource_name,
+                        template=db_sys_resources[resource_type]["state_query"],
+                        name=resource_name,
                         definition=rsc,
                     )
 
@@ -135,13 +136,13 @@ def run(config: InputConfig) -> None:  # noqa: PLR0912, PLR0915
                         # If there is no drift, then it is a new object.
                         if rsc_drift["iac_action"]=="create":
                             sql = utils.render_templates(
-                                template=db_sys_resources[rsc]["template"],
+                                template=db_sys_resources[resource_type]["template"],
                                 definition=rsc_drift["definition"],
                                 name=resource_name,
-                                iac_action=db_sys_resources[rsc]["iac_action"]["create"],
+                                iac_action=db_sys_resources[resource_type]["iac_action"]["create"],
                             )
 
-                            Console().print(f"\n[bold green3] + Create '{rsc}'[/bold green3]")
+                            Console().print(f"\n[bold green3] + Create '{resource_type}'[/bold green3]")
                             pretty_sql = Syntax(sql, "sql", theme="monokai", line_numbers=False)
                             Console().print(pretty_sql)
 
@@ -149,6 +150,7 @@ def run(config: InputConfig) -> None:  # noqa: PLR0912, PLR0915
                                 utils.execute_rendered_sql_template(
                                     connection=conn,
                                     sql=sql,
+                                    wait_time=rsc.get("wait_time", None),
                                 )
 
                         # Do nothing if the the object has not drifted, definition and the state are the same.
@@ -158,13 +160,13 @@ def run(config: InputConfig) -> None:  # noqa: PLR0912, PLR0915
                         # If the object drifted, alter the properties of the object.
                         elif rsc_drift["iac_action"]=="alter":
                             sql = utils.render_templates(
-                                template=db_sys_resources[rsc]["template"],
+                                template=db_sys_resources[resource_type]["template"],
                                 definition=rsc_drift["definition"],
                                 name=resource_name,
-                                iac_action=db_sys_resources[rsc]["iac_action"]["alter"],
+                                iac_action=db_sys_resources[resource_type]["iac_action"]["alter"],
                             )
 
-                            Console().print(f"\n[bold sandy_brown] ~ Alter '{rsc}'[/bold sandy_brown]")
+                            Console().print(f"\n[bold sandy_brown] ~ Alter '{resource_type}'[/bold sandy_brown]")
                             pretty_sql = Syntax(sql, "sql", theme="monokai", line_numbers=False)
                             Console().print(pretty_sql)
 
@@ -172,17 +174,18 @@ def run(config: InputConfig) -> None:  # noqa: PLR0912, PLR0915
                                 utils.execute_rendered_sql_template(
                                     connection=conn,
                                     sql=sql,
+                                    wait_time=rsc.get("wait_time", None),
                                 )
 
                     elif config.run_mode.lower() == "destroy":
                         sql = utils.render_templates(
-                            template=db_sys_resources[rsc]["template"],
+                            template=db_sys_resources[resource_type]["template"],
                             definition=rsc_drift["definition"],
                             name=resource_name,
-                            iac_action=db_sys_resources[rsc]["iac_action"]["drop"],
+                            iac_action=db_sys_resources[resource_type]["iac_action"]["drop"],
                         )
 
-                        Console().print(f"\n[bold red3] - Drop '{rsc}'[/bold red3]")
+                        Console().print(f"\n[bold red3] - Drop '{resource_type}'[/bold red3]")
                         pretty_sql = Syntax(sql, "sql", theme="monokai", line_numbers=False)
                         Console().print(pretty_sql)
 
@@ -190,6 +193,7 @@ def run(config: InputConfig) -> None:  # noqa: PLR0912, PLR0915
                             utils.execute_rendered_sql_template(
                                 connection=conn,
                                 sql=sql,
+                                wait_time=rsc.get("wait_time", None),
                             )
 
         except Exception as err:
