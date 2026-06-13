@@ -1,0 +1,19 @@
+[[warehouse]]
+name = "some_warehouse"
+owner = "SYSADMIN"
+warehouse_type = "STANDARD"
+warehouse_size = "XSMALL"
+max_cluster_count = 10
+min_cluster_count = 1
+scaling_policy = "STANDARD"
+auto_suspend = 600
+auto_resume = true
+initially_suspended = false
+comment = "This is a test warehouse"
+enable_query_acceleration = false
+query_acceleration_max_scale_factor = 1
+max_concurrency_level = 8
+statement_queued_timeout_in_seconds = 0
+statement_timeout_in_seconds = 172800
+object_id_tag = "fa084829-f5fa-3b17-956d-9310a88bc0f3"
+

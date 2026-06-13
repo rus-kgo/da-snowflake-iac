@@ -1,0 +1,25 @@
+[[index]]
+name = "first_table_ix"
+table = "firs_table"
+database = "main_db"
+schema = "main_schema"
+unique = true
+wait_time = 2
+
+[index.depends_on]
+table = [
+    "first_table",
+]
+
+[[index]]
+name = "second_table_ix"
+table = "second_table"
+database = "main_db"
+schema = "main_schema"
+unique = false
+wait_time = 0
+
+[index.depends_on]
+table = [
+    "second_table",
+]

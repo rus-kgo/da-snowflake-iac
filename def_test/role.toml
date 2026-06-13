@@ -1,0 +1,8 @@
+[[role]]
+name = "aws_step_function"
+comment = "to be used for aws step functions"
+
+[[role]]
+name = "rus_kgo"
+comment = "to be used for aws step functions"
+

@@ -1,0 +1,21 @@
+[[table]]
+name = "example_table"
+database = "example_database"
+schema = "example_schema"
+owner = "SYSADMIN"
+comment = "This is a table comment"
+object_id_tag = "456e1234-e89b-12d3-a456-426614174000"
+[[table.columns]]
+name = "column1"
+type = "VARCHAR"
+nullable = true
+comment = "Column 1 description"
+
+[[table.columns]]
+name = "column2"
+type = "INT"
+nullable = false
+default = 0
+comment = "Column 2 description"
+
+

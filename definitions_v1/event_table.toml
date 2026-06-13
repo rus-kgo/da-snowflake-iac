@@ -1,0 +1,9 @@
+[[event_table]]
+name = "some_event_table"
+data_retention_time_in_days = 365
+max_data_extension_time_in_days = 30
+change_tracking = true
+default_ddl_collation = "utf8"
+comment = "This is a sample event table."
+object_id_tag = "123efg45-hijk-6789-lmno-pqrs987654tu"
+

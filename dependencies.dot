@@ -1,0 +1,9 @@
+digraph G {
+  rankdir=LR;
+  node [shape=ellipse, style=filled, fillcolor=lightgrey, fontname=Helvetica];
+"database::MODELING";
+"database::PRESENTATION";
+"table::FIRST_TABLE" -> "database::MODELING";
+"table::SECOND_TABLE" -> "database::MODELING";
+"table::SECOND_TABLE" -> "database::PRESENTATION";
+}

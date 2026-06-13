@@ -1,0 +1,48 @@
+[[security_integration]]
+name = "test_inter"
+type = "external_oauth"
+owner = ""
+enabled = true
+external_oauth_type = "azure"
+external_oauth_issuer = ["http://issuer1", "issuer2"]
+external_oauth_token_user_mapping_claim = ["http://token"]
+external_oauth_snowflake_user_mapping_attribute = "test"
+external_oauth_jws_keys_url = ["key_url"]
+external_oauth_blocked_roles_list = ["blocked"]
+external_oauth_allowed_roles_list = ["allowed"]
+external_oauth_rsa_public_key = "pubkey"
+external_oauth_rsa_public_key_2 = "pubke2"
+external_oauth_audience_list = ["audience1", "audience2"]
+external_oauth_any_role_mode = "true"
+external_oauth_scope_delimiter = ","
+external_oauth_scope_mapping_attribute = "whatever"
+comment = "this is a sec integration"
+object_id_tag = "d191164a-7813-45f2-aba9-400f3bd31397"
+wait_time = ""
+[security_integration.depends_on]
+    role = ["aws_step_function", "rus_kgo"]
+
+
+[[security_integration]]
+name = "test_inter_2"
+type = "external_oauth"
+owner = ""
+enabled = true
+external_oauth_type = "azure"
+external_oauth_issuer = []
+external_oauth_token_user_mapping_claim = ""
+external_oauth_snowflake_user_mapping_attribute = ""
+external_oauth_jws_keys_url = []
+external_oauth_blocked_roles_list = []
+external_oauth_allowed_roles_list = []
+external_oauth_rsa_public_key = ""
+external_oauth_rsa_public_key_2 = ""
+external_oauth_audience_list = []
+external_oauth_any_role_mode = ""
+external_oauth_scope_delimiter = ""
+external_oauth_scope_mapping_attribute = ""
+comment = ""
+wait_time = ""
+object_id_tag = "44332bdb-8c5b-46df-a78d-37e30ac4abb7"
+[security_integration.depends_on]
+    wrong = ["aws_step_function", "rus_kgo"]

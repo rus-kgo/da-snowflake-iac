@@ -1,0 +1,13 @@
+[[database]]
+name = "my_db"
+transient = false
+data_retention_time_in_days = 1
+default_ddl_collation = "utf8"
+log_level = "INFO"
+[database.depends_on]
+role = ["rus_kgo"]
+
+[[database]]
+name = "other_db"
+default_ddl_collation = "utf8"
+

@@ -1,0 +1,9 @@
+[[grant]]
+name = "some_grant"
+privilege = "SELECT"
+on_object = "example_table"
+on_object_type = "TABLE"
+to_role = "example_role"
+with_grant_option = false
+object_id_tag = "3a9a7054-6e42-3d40-aa22-e4cc3c93be30"
+

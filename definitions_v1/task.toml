@@ -1,0 +1,14 @@
+[[task]]
+name = "example_task"
+database = "example_database"
+schema = "example_schema"
+owner = "SYSADMIN"
+schedule = "USING CRON 0 9 * * * UTC"
+user_task_timeout_ms = 300000
+error_integration = "example_error_integration"
+comment = "This is a task comment"
+object_id_tag = "987f6543-b21c-43d5-a678-123456789abc"
+definition = "INSERT INTO example_table\nSELECT * FROM source_table;"
+
+[task.session_parameters]
+QUERY_TAG = "example_query_tag"

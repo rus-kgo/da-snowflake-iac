@@ -1,0 +1,17 @@
+[[database]]
+name = "MODELING"
+transient = false
+owner = "ACCOUNTADMIN"
+data_retention_time_in_days = 1
+default_ddl_collation = "utf8"
+log_level = "INFO"
+wait_time = 0
+[database.depends_on]
+
+[[database]]
+name = "PRESENTATION"
+owner = "ACCOUNTADMIN"
+default_ddl_collation = "utf8"
+wait_time = 1
+[database.depends_on]
+

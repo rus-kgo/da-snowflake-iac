@@ -1,0 +1,37 @@
+[table.ddl_command]
+create = "CREATE"
+alter  = "ALTER"
+drop   = "DROP"
+
+[table.ddl_context]
+name = "example_table"
+database = "main"
+schema = "main"
+wait_time = 0
+
+[[table.ddl_context.columns]]
+name = "id"
+type = "INTEGER"
+nullable = false
+
+[table.ddl_context.depends_on]
+database = ["expl_db_one"]
+schema = ["exmpl_sch_one"]
+
+[index.ddl_command]
+create = "CREATE"
+alter = ""
+drop = "DROP"
+
+[index.ddl_context]
+name = "example_table"
+table = "main"
+database = "main"
+schema = "main"
+unique = true
+wait_time = 0
+
+[[index.ddl_context.columns]]
+name = "id"
+
+[index.ddl_context.depends_on]

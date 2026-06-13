@@ -1,0 +1,47 @@
+[snowflake.database.ddl_command]
+create = "CREATE OR ALTER"
+alter  = "CREATE OR ALTER"
+drop   = "DROP"
+
+[snowflake.database.ddl_context]
+name = "example_database"
+owner = "ACCOUNTADMIN"
+transient = false
+data_retention_time_in_days = 1
+max_data_extension_time_in_days = 15
+default_ddl_collation = "utf8"
+log_level = "INFO"
+comment = "Example database"
+wait_time = 0
+
+[snowflake.database.ddl_context.depends_on]
+
+
+[snowflake.table.ddl_command]
+create = "CREATE"
+alter  = "ALTER"
+drop   = "DROP"
+
+[snowflake.table.ddl_context]
+name = "first_table"
+database = "modeling"
+schema = "bi_domain"
+comment = "Example role"
+wait_time = 0
+
+[snowflake.table.ddl_context.depends_on]
+database = [
+  "example_database"
+]
+
+[[snowflake.table.ddl_context.columns]]
+name = "id"
+type = "NUMBER(38,0)"
+nullable = false
+comment = "Primary key"
+
+[[snowflake.table.ddl_context.columns]]
+name = "name"
+type = "VARCHAR(100)"
+nullable = true
+comment = "Name field"

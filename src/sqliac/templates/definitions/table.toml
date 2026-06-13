@@ -1,0 +1,31 @@
+[[table]]
+name = "FIRST_TABLE"
+database = "MODELING"
+schema = "BI_DOMAIN"
+owner = "SYSADMIN"
+comment = "This is a table comment"
+wait_time = 0
+[table.depends_on]
+database = ["MODELING"]
+
+[[table.columns]]
+name = "column1"
+type = "VARCHAR"
+nullable = true
+comment = "Column 1 description"
+
+[[table.columns]]
+name = "column2"
+type = "INT"
+nullable = false
+default = 0
+comment = "Column 2 description"
+
+[[table.columns]]
+name = "column3"
+type = "INT"
+nullable = true
+default = 0
+comment = "Column 3 description"
+
+
