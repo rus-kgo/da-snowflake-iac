@@ -2,84 +2,91 @@
 
 from __future__ import annotations
 
-import os
 import tomllib
 from importlib.resources import files
-from tomllib import TOMLDecodeError
-from typing import Any, TYPE_CHECKING
 from pathlib import Path
+from tomllib import TOMLDecodeError
+from typing import TYPE_CHECKING, Any
+
 from dictdiffer import diff
 
-
-from sqliac.errors import RustyError
 from sqliac.constants import Paths
+from sqliac.errors import RustyError
 
 if TYPE_CHECKING:
-    from sqliac.providers_loader import ProviderConfig, ResourceConfig
     from importlib.resources.abc import Traversable
+
+    from sqliac.providers_loader import ProviderConfig, ResourceConfig
 
 
 class DefinitionsLoader:
     """Manages the loading of resouce definitions."""
 
-    def __init__(self, directory: str) -> None:  # noqa: D107
-        self.directory_path = self._validate_dir(directory)
-
+    @classmethod
     def load(
-        self, provider_config: ProviderConfig
+        cls, provider_config: ProviderConfig
     ) -> dict[str, list[dict[str, str | bool | dict[Any, Any] | None]]]:
         """Load all the definitions."""
         available_resources = list(provider_config.resources.keys())
-
-        definition_files = self._validate_definitions_dir(available_resources)
-
-        definitions = self._load_files(definition_files)
-
-        self._validate_definitions(provider_config.resources, definitions)
+        definition_files = cls._validate_definitions_dir(available_resources)
+        definitions = cls._load_files(definition_files)
+        cls._validate_definitions(provider_config.resources, definitions)
 
         return definitions
 
-    @staticmethod
-    def _validate_dir(directory: str) -> Path:
-        directory_path = Path(directory)
-        if not directory_path.exists():
+    @classmethod
+    def _validate_definitions_dir(cls, available_resources: list[str]) -> list[Path]:
+        try:
+            definition_files = Paths.DEFINITIONS_DIR.iterdir()
+        except FileNotFoundError:
             raise RustyError(
-                error="definitions directory not found",
-                file=directory,
-                help=f"create the definitions directory: `.\\{Paths.DEFINITIONS_DIR}\\<resource type>.toml`",
-            )
-        if not directory_path.is_dir():
-            raise RustyError(
-                error="definitions path must be a directory",
-                file=directory,
-            )
-        return directory_path
+                error="invalid definitions directory",
+                file=str(Paths.DEFINITIONS_DIR),
+                help=f"resources definitions must be in \
+                `{str(Paths.DEFINITIONS_DIR)}` directory",
+            ) from None
+        else:
+            toml_files = [
+                f for f in definition_files if f.is_file() and f.suffix == ".toml"
+            ]
 
-    def _load_files(self, definition_files: list[str]) -> dict[str, Any]:
+            invalid_files = {
+                f.stem for f in toml_files if f.stem not in available_resources
+            }
+
+            if invalid_files:
+                invalid_files_list = "\n  - ".join(invalid_files)
+                raise RustyError(
+                    error="invalid definition files",
+                    file=str(Paths.DEFINITIONS_DIR),
+                    details=f"""invalid definitions:
+    - {invalid_files_list if invalid_files_list else "None"}""",
+                    help="only include definition of resources that are \
+                    available in the provider config",
+                ) from None
+
+        return toml_files
+
+    @classmethod
+    def _load_files(cls, definition_files: list[Path]) -> dict[str, Any]:
         """Load resource definitions from TOML files."""
         definitions = {}
 
-        # Load each definition file
         for file in definition_files:
-            if not file.endswith(".toml"):
-                continue
-
-            file_path = os.path.join(self.directory_path, file)
-
             try:
-                with open(file_path, "rb") as f:
+                with open(file, "rb") as f:
                     resource_definitions: dict[str, Any] = tomllib.load(f)
             except TOMLDecodeError as err:
                 raise RustyError(
                     error="invalid TOML file",
-                    file=file,
+                    file=str(file),
                     help="check TOML formatting in the definition file",
                 ) from err
 
             except PermissionError:
                 raise RustyError(
                     error="read permission denied",
-                    file=file,
+                    file=str(file),
                     help="the file might be open by another application or missing read permissions",
                 ) from None
 
@@ -88,46 +95,9 @@ class DefinitionsLoader:
 
         return definitions
 
-    def _validate_definitions_dir(self, available_resources: list[str]) -> list[str]:
-        definition_files = []
-        try:
-            definition_files: list[str] = os.listdir(self.directory_path)
-        except FileNotFoundError:
-            raise RustyError(
-                error="invalid definitions directory",
-                file=str(self.directory_path),
-                help="""create resources definitions directory `.\\definitions\\<provider name>\\`""",
-            ) from None
-
-        except PermissionError:
-            raise RustyError(
-                error="permission denied reading definitions directory",
-                file=str(self.directory_path),
-                help="the file might be open by another application or missing permissions",
-            ) from None
-
-        else:
-            toml_files = [f for f in definition_files if f.endswith(".toml")]
-            invalid_resources = {
-                f
-                for f in toml_files
-                if f.removesuffix(".toml") not in available_resources
-            }
-
-            if invalid_resources:
-                invalid_resources_str = "\n  - ".join(invalid_resources)
-                raise RustyError(
-                    error="invalid definition or it's resource is not available",
-                    file=str(self.directory_path),
-                    details=f"""invalid definitions:
-   - {invalid_resources_str if invalid_resources_str else "None"}""",
-                    help="remove definition of resources that are not available for the provider",
-                ) from None
-
-        return definition_files
-
+    @classmethod
     def _validate_definitions(
-        self,
+        cls,
         provider_resources: dict[str, ResourceConfig],
         all_definitions: dict[str, Any],
     ) -> None:
@@ -135,7 +105,7 @@ class DefinitionsLoader:
             definition_template = provider_resources[resource].ddl_context
 
             for item in definitions:
-                self._check_definition_keys(
+                cls._check_definition_keys(
                     resource_type=resource,
                     definition=item,
                     template=definition_template,
@@ -190,9 +160,9 @@ expected arguments:\n  - {expected_keys_str}""",
     @classmethod
     def init_definitions(cls):
         """Create definitions scaffolding."""
-        source_dir = files(Paths.TEMPLATES_ANCHOR).joinpath(Paths.DEFINITIONS_DIR)
+        source_dir = files(Paths.TEMPLATES_ANCHOR) / Paths.DEFINITIONS_DIR
 
-        target_dir = Path(Paths.DEFINITIONS_DIR)
+        target_dir = Paths.DEFINITIONS_DIR
         target_dir.mkdir(parents=True, exist_ok=True)
 
         cls._copy_resources(source_dir, target_dir)

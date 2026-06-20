@@ -4,14 +4,14 @@
 from __future__ import annotations
 
 import tomllib
+from dataclasses import InitVar, asdict, dataclass, field
 from importlib.resources import files
-from dataclasses import dataclass, asdict, field, InitVar
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from sqliac.errors import RustyError
 from sqliac.adapters import AdapterFactory
 from sqliac.constants import DDLCommand, Paths
+from sqliac.errors import RustyError
 
 if TYPE_CHECKING:
     from importlib.resources.abc import Traversable
@@ -34,7 +34,7 @@ class ResourceConfig:
     ddl_context: dict = field(default_factory=dict)
 
     config_file_path: InitVar[str] = ""
-    resource_name: InitVar[str] = ""
+    resource_type: InitVar[str] = ""
 
     def __post_init__(self, config_file_path: str, resource_name: str):
         """Standard library validation hook."""
@@ -89,56 +89,27 @@ class ProviderConfig:
 class ProviderLoader:
     """Loads a provider directory into a ProviderConfig."""
 
-    def __init__(self, directory: str) -> None:  # noqa: D107
-        self.directory_path = self._validate_dir(directory)
-
-    def load(self):
+    @classmethod
+    def load(cls):
         """Load Provider configuration."""
-        provider_name, resources_raw = self._load_config()
-        resources = self._parse_resources(resources_raw)
+        provider_name, resources_raw = cls._load_config()
+        resources = cls._parse_resources(resources_raw)
         return ProviderConfig(name=provider_name, resources=resources)
 
-    @staticmethod
-    def _validate_dir(directory: str) -> Path:
-        directory_path = Path(directory)
-        if not directory_path.exists() or not directory_path.is_dir():
+    @classmethod
+    def _load_config(cls) -> tuple:
+        if not Paths.PROVIDER_CONFIG_FILE.is_file():
             raise RustyError(
-                error="provider folder not found",
-                file=f".\\{directory}",
-                help="the root of your project must contain provider configuration in the `provider` folder",
-            )
-        return directory_path
-
-    def _load_config(self) -> tuple:
-        config_path = self.directory_path / Paths.CONFIG_FILE
-        if not config_path.exists():
-            raise RustyError(
-                error="missing `config.toml` in provider folder",
-                file=str(config_path),
-                help="""create `config.toml` with resource metadata, example below
-```toml
-[snowflake.table.ddl_command]
-create = "CREATE OR ALTER"
-alter  = "CREATE OR ALTER"
-drop   = "DROP"
-
-[snowflake.table.ddl_context]
-name = "example_table"
-
-[snowflake.table.ddl_context.depends_on]
-database = ["expl_db_one"]
-schema = ["exmpl_sch_one"]
-```
-""",
+                error="missing `config.toml`",
+                file=str(Paths.PROVIDER_CONFIG_FILE),
+                help="run `sqliac init` to create scafolding with required files",
             )
 
-        with open(config_path, "rb") as f:
+        with open(Paths.PROVIDER_CONFIG_FILE, "rb") as f:
             config_data = tomllib.load(f)
 
         provider_name = next(iter(config_data))
-
         available_adapters = AdapterFactory().list_adapters()
-
         if provider_name not in available_adapters:
             raise RustyError(
                 error=f"`{provider_name}` adapter not available",
@@ -151,7 +122,8 @@ schema = ["exmpl_sch_one"]
         if not resources_raw:
             raise RustyError(
                 error=f"`{provider_name}` config contains no resources",
-                help="""create `config.toml` with resource metadata, example below
+                file=str(Paths.PROVIDER_CONFIG_FILE),
+                help="""`config.toml` example below
 ```toml
 [snowflake.table.ddl_command]
 create = "CREATE OR ALTER"
@@ -170,43 +142,34 @@ schema = ["exmpl_sch_one"]
 
         return provider_name, resources_raw
 
+    @classmethod
     def _parse_resources(
-        self, resources_raw: dict[str, dict[str, Any]]
+        cls, resources_raw: dict[str, dict[str, Any]]
     ) -> dict[str, ResourceConfig]:
         resources = {}
 
-        for resource_name, config in resources_raw.items():
-            resource_dir = self.directory_path / resource_name
+        for resource_type, config in resources_raw.items():
+            if not Paths.ddl_template_file(resource_type).is_file():
+                raise RustyError(
+                    error=f"missing `{resource_type}` DDL template.",
+                    file=str(Paths.ddl_template_file(resource_type)),
+                )
+            if not Paths.state_file(resource_type).is_file():
+                raise RustyError(
+                    error=f"missing `{resource_type}` State template.",
+                    file=str(Paths.state_file(resource_type)),
+                )
 
-            self._validate_resource_dir(resource_name, resource_dir)
-
-            resources[resource_name] = ResourceConfig(
-                ddl_template=self._read_sql(resource_dir / Paths.DDL_TEMPLATE_FILE),
-                state_query=self._read_sql(resource_dir / Paths.STATE_FILE),
+            resources[resource_type] = ResourceConfig(
+                ddl_template=cls._read_sql(Paths.ddl_template_file(resource_type)),
+                state_query=cls._read_sql(Paths.state_file(resource_type)),
                 ddl_command=config.get("ddl_command", {}),
                 ddl_context=config.get("ddl_context", {}),
-                config_file_path=str(self.directory_path / Paths.CONFIG_FILE),
-                resource_name=resource_name,
+                config_file_path=str(Paths.PROVIDER_CONFIG_FILE),
+                resource_type=resource_type,
             )
 
         return resources
-
-    @staticmethod
-    def _validate_resource_dir(name: str, resource_dir: Path) -> None:
-        if not resource_dir.is_dir():
-            raise RustyError(
-                error=f"missing directory for resource '{name}'",
-                file=str(resource_dir),
-                help=f"create the directory `{resource_dir}/`",
-            )
-
-        for file in (Paths.DDL_TEMPLATE_FILE, Paths.STATE_FILE):
-            if not (resource_dir / file).exists():
-                raise RustyError(
-                    error=f"missing '{file}' for resource '{name}'",
-                    file=str(resource_dir / file),
-                    help="create the file with a valid Jinja2 SQL template",
-                )
 
     @staticmethod
     def _read_sql(path: Path) -> str:
