@@ -72,16 +72,6 @@ class ExecutionPlan:
 
         # Find missing resources
         missing = referenced_resources - existing_resources
-        from icecream import ic
-
-        ic(existing_resources)
-        ic(referenced_resources)
-        ic(missing)
-        ic(dependency_graph)
-        for k, v in dependency_graph.items():
-            if missing.issubset(v):
-                ic(k)
-                ic(v)
 
         if missing:
             blocks = []
