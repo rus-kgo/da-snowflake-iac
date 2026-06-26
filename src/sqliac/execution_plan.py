@@ -72,27 +72,30 @@ class ExecutionPlan:
 
         # Find missing resources
         missing = referenced_resources - existing_resources
+        from icecream import ic
+
+        ic(existing_resources)
+        ic(referenced_resources)
+        ic(missing)
+        ic(dependency_graph)
+        for k, v in dependency_graph.items():
+            if missing.issubset(v):
+                ic(k)
+                ic(v)
 
         if missing:
             blocks = []
 
-            for item in missing:
-                rsc, name = item.split("::")
-
-                block = f"""\
-            --> {rsc}.yml
-            |
-            1 | [[{rsc}]]
-            2 | name = "{name}"
-            |       ^^^ missing definition
-            |
-            """
-
-                blocks.append(block)
+            for node, edges in dependency_graph.items():
+                for item in missing:
+                    if item in edges:
+                        blocks.append(f"\n\n    [{node}] -> [{item}]")
 
             raise RustyError(
                 error="invalid dependency reference",
-                details="missing resources:\n\n" + "\n".join(blocks),
+                file=str(Paths.DEFINITIONS_DIR),
+                details=f"invalid or missing references:  {''.join(blocks)}",
+                note="resource names are case sesitive",
             )
 
     def _build_reverse_graph(
