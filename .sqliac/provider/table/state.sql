@@ -3,16 +3,14 @@ SELECT object_construct(
     'database', table_catalog,
     'schema', table_schema,
     'comment', comment,
-    'columns', array_agg(
-        object_construct(
-            'name', column_name,
-            'type', data_type,
-            'nullable', is_nullable = 'YES'
-        )
-        ORDER BY ordinal_position
-    )
+    'columns',  array_agg(
+            object_construct(
+                'name',"COLUMN_NAME",
+                'type', "DATA_TYPE",
+                'nullable', "IS_NULLABLE" = 'YES'
+            )) within group (order by "ORDINAL_POSITION")
 ) AS table_metadata
-FROM information_schema.columns
+FROM snowflake.information_schema.columns
 WHERE table_name = '{{ name }}'
   AND table_schema = '{{ schema }}'
   AND table_catalog = '{{ database }}'

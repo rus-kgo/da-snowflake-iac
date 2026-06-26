@@ -1,7 +1,7 @@
 [snowflake.database.ddl_command]
 create = "CREATE OR ALTER"
-alter  = "CREATE OR ALTER"
-drop   = "DROP"
+alter = "CREATE OR ALTER"
+drop = "DROP"
 
 [snowflake.database.ddl_context]
 name = "example_database"
@@ -19,20 +19,16 @@ wait_time = 0
 
 [snowflake.table.ddl_command]
 create = "CREATE"
-alter  = "ALTER"
-drop   = "DROP"
+alter = "ALTER"
+drop = "DROP"
 
 [snowflake.table.ddl_context]
 name = "first_table"
+owner = "SYSADMIN"
 database = "modeling"
 schema = "bi_domain"
 comment = "Example role"
 wait_time = 0
-
-[snowflake.table.ddl_context.depends_on]
-database = [
-  "example_database"
-]
 
 [[snowflake.table.ddl_context.columns]]
 name = "id"
@@ -45,3 +41,6 @@ name = "name"
 type = "VARCHAR(100)"
 nullable = true
 comment = "Name field"
+
+[snowflake.table.ddl_context.depends_on]
+database = ["example_database"]

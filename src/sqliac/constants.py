@@ -1,4 +1,5 @@
-from enum import StrEnum  # noqa: D100
+from enum import StrEnum
+from pathlib import Path
 
 
 class TemplateType(StrEnum):
@@ -18,7 +19,7 @@ class DDLCommand(StrEnum):
     NO_ACTION = "no_action"
 
     @classmethod
-    def executable(cls) -> tuple[DDLCommand, ...]:  # noqa: D102
+    def executable(cls) -> tuple[StrEnum, ...]:
         return (cls.CREATE, cls.ALTER, cls.DROP)
 
 
@@ -36,15 +37,23 @@ class RunMode(StrEnum):
     LIVE_RUN = "live_run"
 
 
-class Paths(StrEnum):
-    """Defines the required file paths."""
+class Paths:
+    """Defines the required file paths as Path objects."""
 
-    CONFIG_DIR = ".sqliac"
-    CONFIG_FILE = "config.toml"
-    CREDENTIALS_FILE = "credentials.toml"
-    PROVIDER_DIR = "provider"
-    DEFINITIONS_DIR = "definitions"
-    DDL_TEMPLATE_FILE = "ddl_template.sql"
-    STATE_FILE = "state.sql"
+    CONFIG_DIR = Path(".sqliac")
+    PROVIDER_DIR = Path("provider")
+    PROVIDER_CONFIG_FILE = CONFIG_DIR / PROVIDER_DIR / "config.toml"
+    PROVIDER_CREDENTIALS_FILE = CONFIG_DIR / PROVIDER_DIR / "credentials.toml"
+    DEFINITIONS_DIR = Path("definitions")
     TEMPLATES_ANCHOR = "sqliac.templates"
-    DEPENDENCIES_FILE = "dependencies.dot"
+    DEPENDENCIES_FILE = Path("dependencies.dot")
+
+    @classmethod
+    def ddl_template_file(cls, resource_type: str) -> Path:
+        """Returns the DDL template file path for a given resource type."""
+        return cls.CONFIG_DIR / cls.PROVIDER_DIR / resource_type / "ddl_template.sql"
+
+    @classmethod
+    def state_file(cls, resource_type: str) -> Path:
+        """Returns the state file path for a given resource type."""
+        return cls.CONFIG_DIR / cls.PROVIDER_DIR / resource_type / "state.sql"

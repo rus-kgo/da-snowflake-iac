@@ -19,6 +19,10 @@ if TYPE_CHECKING:
     from sqliac.providers_loader import ProviderConfig, ResourceConfig
 
 
+def _resolve_path(path: Path):
+    return path if path.is_absolute() else Path.cwd() / path
+
+
 class DefinitionsLoader:
     """Manages the loading of resouce definitions."""
 
@@ -36,14 +40,16 @@ class DefinitionsLoader:
 
     @classmethod
     def _validate_definitions_dir(cls, available_resources: list[str]) -> list[Path]:
+        target_dir = _resolve_path(Paths.DEFINITIONS_DIR)
+
         try:
-            definition_files = Paths.DEFINITIONS_DIR.iterdir()
+            definition_files = target_dir.iterdir()
         except FileNotFoundError:
             raise RustyError(
                 error="invalid definitions directory",
-                file=str(Paths.DEFINITIONS_DIR),
+                file=str(target_dir),
                 help=f"resources definitions must be in \
-                `{str(Paths.DEFINITIONS_DIR)}` directory",
+                `{str(target_dir)}` directory",
             ) from None
         else:
             toml_files = [
@@ -58,7 +64,7 @@ class DefinitionsLoader:
                 invalid_files_list = "\n  - ".join(invalid_files)
                 raise RustyError(
                     error="invalid definition files",
-                    file=str(Paths.DEFINITIONS_DIR),
+                    file=str(target_dir),
                     details=f"""invalid definitions:
     - {invalid_files_list if invalid_files_list else "None"}""",
                     help="only include definition of resources that are \
@@ -162,7 +168,7 @@ expected arguments:\n  - {expected_keys_str}""",
         """Create definitions scaffolding."""
         source_dir = files(Paths.TEMPLATES_ANCHOR) / Paths.DEFINITIONS_DIR
 
-        target_dir = Paths.DEFINITIONS_DIR
+        target_dir = _resolve_path(Paths.DEFINITIONS_DIR)
         target_dir.mkdir(parents=True, exist_ok=True)
 
         cls._copy_resources(source_dir, target_dir)

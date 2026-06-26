@@ -41,35 +41,8 @@ class ValueSanitizer:
                 help="ensure the input is a valid numeric value",
             ) from None
 
-    def to_bool(self, value: Any, source: str) -> bool:
-        """Convert to bool."""
-        if isinstance(value, str):
-            lower_value = value.lower().strip()
-            if lower_value in {"true", "false"}:
-                return lower_value == "true"
-        try:
-            return value == True
-        except (ValueError, TypeError):
-            raise RustyError(
-                error="value error",
-                details="value must be a boolean (true/false)",
-                note=f"source: {source}" if source else None,
-                help="use 'true' or 'false' as string values",
-            ) from None
-
     def _deep_clean_recursive(self, value: Any, depth: int) -> Any:
-        """Internal: Recursively traverse and clean nested structures.
-
-        Args:
-            value: Value to clean (string, dict, list, or other)
-            depth: Current recursion depth
-
-        Returns:
-            Cleaned value with same structure as input
-
-        Raises:
-            RustyError: If depth exceeds MAX_DEPTH
-        """
+        """Internal: Recursively traverse and clean nested structures."""
         if depth > self.MAX_DEPTH:
             raise RustyError(
                 error="nesting limit exceeded",
@@ -91,17 +64,7 @@ class ValueSanitizer:
         return value
 
     def deep_clean(self, value: Any) -> dict[str, Any]:
-        """Recursively clean nested structures (dict/list) from SQL injection.
-
-        Traverses dicts and lists to arbitrary depth, sanitizing all string values.
-        Non-string leaf values pass through unchanged.
-
-        Args:
-            value: String, dict, list, or nested combination thereof
-
-        Returns:
-            Cleaned structure with same shape as input
-        """
+        """Recursively clean nested structures (dict/list) from SQL injection."""
         try:
             return self._deep_clean_recursive(value, depth=0)
         except RustyError:

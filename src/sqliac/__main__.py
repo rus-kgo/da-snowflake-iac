@@ -1,6 +1,6 @@
 """SQLIaC entry point."""
 
-from sqliac import cli, __prog_name__
+from sqliac import cli
 
 if __name__ == "__main__":
-    cli.main(prog_name=__prog_name__)
+    cli.main()

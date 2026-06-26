@@ -2,38 +2,25 @@
 
 __version__ = "0.1.0"
 
-from .base import (
-    BaseAdapter,
-    BaseConnectionManager,
-    BaseCredentials,
-    ConnectionState,
-)
-from .factory import AdapterFactory
 from .adapter_snowflake import (
     SnowflakeAdapter,
     SnowflakeConnectionManager,
     SnowflakeCredentials,
 )
-from .adapter_sqlite import (
-    SQLiteAdapter,
-    SQLiteConnectionManager,
-    SQLiteCredentials,
+from .base import (
+    BaseAdapter,
+    BaseCredentials,
 )
+from .factory import AdapterFactory
 
 __all__ = [
     # Base classes
     "BaseAdapter",
-    "BaseConnectionManager",
     "BaseCredentials",
-    "ConnectionState",
     # Factory
     "AdapterFactory",
     # Snowflake
     "SnowflakeAdapter",
     "SnowflakeConnectionManager",
     "SnowflakeCredentials",
-    # SQLite
-    "SQLiteAdapter",
-    "SQLiteConnectionManager",
-    "SQLiteCredentials",
 ]

@@ -35,5 +35,11 @@ schema = "CUSTOMERS"
 owner = "SYSADMIN"
 comment = "This is a table comment"
 wait_time = 0
+[[table.columns]]
+name = "column1"
+type = "INT"
+nullable = true
+default = 0
+comment = "Column 1 description"
 [table.depends_on]
 database = ["MODELING", "PRESENTATION"]

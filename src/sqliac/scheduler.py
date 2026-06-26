@@ -1,17 +1,17 @@
 """Scheduler for executing database infrastructure tasks."""
 
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from rich.console import Console, Group
-from rich.panel import Panel
-from rich.syntax import Syntax
-from rich.text import Text
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import TYPE_CHECKING, Any
 
-from sqliac import DDLCommand, TemplateType, IacAction, RunMode
+from rich.console import Console, Group
+from rich.panel import Panel
+from rich.text import Text
+
+from sqliac import DDLCommand, IacAction, RunMode, TemplateType
 from sqliac.drift import Drift
-from sqliac.template_engine import TemplateEngine
 from sqliac.errors import RustyError
+from sqliac.template_engine import TemplateEngine
 
 if TYPE_CHECKING:
     from sqliac.adapters.base import BaseAdapter
@@ -55,15 +55,7 @@ class Scheduler:
         """Execute rendered SQL template using adapter."""
         message_lines = []
 
-        sql_pretty = Syntax(
-            sql,
-            "sql",
-            theme="monokai",
-            line_numbers=True,
-            indent_guides=False,
-            padding=(0, 1),
-        )
-
+        sql_pretty_syntax = TemplateEngine.pretty_sql(sql=sql, as_syntax=True)
         if wait_time:
             message_lines.append(
                 Text.assemble(
@@ -91,11 +83,11 @@ class Scheduler:
 
         message_lines.append(Text())
         message_lines.append(Text("sql statement:", style=color))
-        message_lines.append(sql_pretty)
+        message_lines.append(sql_pretty_syntax)
 
         msg = Group(*message_lines)
 
-        Console().print(
+        Console(force_terminal=True).print(
             Panel(
                 msg,
                 title=title,
@@ -124,6 +116,7 @@ class Scheduler:
             # Step 2: Check drift
             drift_ddl_context = self.drift.resource_state(
                 definition=ddl_context,
+                template=self.provider_resources[rsc_type].ddl_context,
                 resource_type=rsc_type,
                 state_query=rsc_state_query,
                 name=rsc_name,
@@ -167,10 +160,12 @@ class Scheduler:
                         depends_on=ddl_context["depends_on"],
                         wait_time=ddl_context.get("wait_time", None),
                     )
+                except RustyError as err:
+                    err.print()
                 except Exception as err:
                     raise RustyError(
-                        error="failed to execute SQL query.",
-                        details=f"faild task: {task}",
+                        error=f"failed to execute SQL query, task: {task}",
+                        details=str(err),
                     ) from err
                 else:
                     self.succeded_tasks.add(task)
@@ -209,7 +204,9 @@ class Scheduler:
         ready = {n for n, d in execution_plan.dependency_graph.items() if not d}
         futures = {}
 
-        with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
+        with ThreadPoolExecutor(
+            max_workers=MAX_THREADS, thread_name_prefix=self.conn.dialect
+        ) as executor:
             while ready or futures:
                 # submit all ready tasks
                 while ready:
@@ -228,5 +225,3 @@ class Scheduler:
                         execution_plan.dependency_graph[child].remove(task)
                         if not execution_plan.dependency_graph[child]:
                             ready.add(child)
-
-                break

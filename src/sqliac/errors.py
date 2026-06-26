@@ -11,6 +11,7 @@ in the style of Rust compiler diagnostics, with support for:
 
 from rich.console import Console
 from rich.markdown import Markdown
+from rich.syntax import Syntax
 from rich.text import Text
 
 
@@ -25,6 +26,7 @@ class RustyError(Exception):
         file: str | Markdown | None = None,
         help: str | Markdown | None = None,  # noqa: A002
         note: str | Markdown | None = None,
+        sql: str | None = None,
     ):
         """Initialize with structured error information.
 
@@ -40,6 +42,7 @@ class RustyError(Exception):
         self.file = file
         self.help = help
         self.note = note
+        self.sql = sql
 
         # Build plain-text message for __str__ (fallback)
         msg_lines = [f"\nerror: {error}"]
@@ -47,6 +50,8 @@ class RustyError(Exception):
             msg_lines.append(f"\n    --> {file}")
         if details:
             msg_lines.append(f"\ndetails: {details}")
+        if sql:
+            msg_lines.append(f"\nstatement: \n{sql}")
         if help:
             msg_lines.append(f"\nhelp: {help}")
         if note:
@@ -69,6 +74,21 @@ class RustyError(Exception):
         if self.details:
             console.print(Text())
             console.print(Markdown(f"**details**: {self.details}"))
+        if self.sql:
+            console.print(Text())
+            console.print(Markdown("**statement**:"))
+            console.print(
+                Syntax(
+                    self.sql,
+                    "sql",
+                    theme="monokai",
+                    line_numbers=True,
+                    indent_guides=False,
+                    padding=(0, 1),
+                    background_color=None,
+                    word_wrap=True,
+                )
+            )
         if self.help:
             console.print(Text())
             console.print(Markdown(f"**help**: {self.help}"))

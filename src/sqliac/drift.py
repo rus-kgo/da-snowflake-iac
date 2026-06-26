@@ -7,16 +7,18 @@ Drift is the term for when the real-world state of your infrastructure differs f
 from __future__ import annotations
 
 import json
-from typing import Any, TYPE_CHECKING
+from dataclasses import asdict, dataclass, field
+from typing import TYPE_CHECKING, Any
+
 from dictdiffer import diff
-from dataclasses import dataclass, field, asdict
 
 if TYPE_CHECKING:
     from sqliac.adapters.base import BaseAdapter
 
-from sqliac.value_sanitizer import ValueSanitizer
-from sqliac.errors import RustyError
 from sqliac import DDLCommand
+from sqliac.constants import Paths
+from sqliac.errors import RustyError
+from sqliac.value_sanitizer import ValueSanitizer
 
 
 @dataclass
@@ -100,113 +102,62 @@ class Drift:
             key: self.sanitizer.deep_clean(value) for key, value in ddl_context.items()
         }
 
-    def _fetch_state(self, query: str) -> dict:
+    def _fetch_state(self, query: str, resource_type: str) -> dict:
         """Fetch the resource state as a dictionary."""
-        data = self.connection.execute(query)
-        if not data:
+        row: BaseAdapter.Row = self.connection.execute(query)
+        if not row:
             return {}
 
-        row = data[0]
-
-        json_str = row.get("object_metadata") if isinstance(row, dict) else row[0]
-
+        json_str = row[0] if isinstance(row, tuple) and len(row) > 0 else None
         if not json_str:
-            state_query = """
-            SELECT object_construct(
-                'name', database_name,
-                'owner', database_owner,
-                'transient', type = 'TRANSIENT',
-                'data_retention_time_in_days', retention_time,
-                'comment', comment,
-                'created_on', created
-            ) as object_metadata
-            FROM information_schema.databases
-            WHERE database_name = '{{ name }}'
-            LIMIT 1
-            """
             raise RustyError(
-                error="failed to parse JSON from state query",
-                file="./resources.toml",
-                help="make sure that state query SQL template returns "
-                "`object_metadata` column with a single row JSON object"
-                f"\n   Snowflake database example:\n{state_query}",
+                error="could not retrieve 'object_metadata' from the database query",
+                file=str(Paths.state_file(resource_type)),
+                help="Ensure the SQL query returns a column named 'object_metadata' "
+                "containing a JSON string, or that the first column of the result "
+                "contains the JSON string.",
             )
 
         try:
             return json.loads(json_str)
         except json.JSONDecodeError as err:
             raise RustyError(
-                error="failed to parse JSON from state query",
-                file="./resources.toml",
+                error="failed to parse JSON from database query result.",
+                file=str(Paths.state_file(resource_type)),
+                details=f"attempted to parse: {json_str[:200]}...",
             ) from err
 
+    @staticmethod
     def _check_state_keys(
-        self, resource_type: str, definition: dict, state: dict, name: str
+        resource_type: str, definition: dict, state: dict, name: str
     ) -> None:
-        """Check state and definition keys match.
+        """Check state and definition keys match."""
+        invalid_keys = set(definition.keys()) - set(state.keys()) if state else None
 
-        Args:
-            resource_type (str): Dabatabase resource type
-            definition (dict): Resource definiton by the user
-            state (dict): State of the resource in the database
-            name (str): Resource identifier in the database
-        """
-        keys_check_result = list(diff(first=definition, second=state))
-
-        invalid_keys = set()
-        missing_keys = set()
-
-        # missing  and invalid keys will have no path
-        for action, path, details in keys_check_result:
-            if state == {}:
-                continue
-
-            if path != "":
-                continue
-
-            # ('add', '', [('wrong', '')]),
-            if action == "add":
-                for tpl in details:
-                    key = tpl[0] if len(tpl) > 1 else None
-                    invalid_keys.add(key)
-
-            # ('remove', '', [('schema', 'NEW')])]
-            elif action == "remove":
-                for tpl in details:
-                    key = tpl[0] if len(tpl) > 1 else None
-                    missing_keys.add(key)
-
-        missing_invalid_keys = invalid_keys | missing_keys
-
-        if missing_invalid_keys:
-            missing_invalid_keys_str = "\n".join(
-                f"  - {k}" for k in missing_invalid_keys
-            )
-            block = f"""\
-        --> {resource_type}.yml
-        |
-        1 | [[{resource_type}]]
-        2 | name = "{name}"
-        |       ^^^ incorrect definition
-        |
-        """
+        if invalid_keys:
+            invalid_keys_str = "\n".join(f"  - {k}" for k in invalid_keys)
             raise RustyError(
-                error="invalid or missing resource definition arguments",
-                file=f"{resource_type}.toml",
-                details=block,
-                help="add the missing arguments to your definition file or "
-                f"remove invalid ones\n    {missing_invalid_keys_str}",
-            )
+                error=f"invalid or missing '{name}' definition arguments",
+                file=str(Paths.DEFINITIONS_DIR / f"{resource_type}.toml"),
+                help=f"""add the missing arguments to your definition file or remove invalid ones
+{invalid_keys_str}""",
+            ) from None
 
-    def _check_state_values(self, state: dict, definition: dict) -> DriftDDLContext:
+    def _check_state_values(
+        self, state: dict, definition: dict, template: dict
+    ) -> DriftDDLContext:
         """Check the difference between state and definition values.
 
         Args:
-            definition (str): Resource definiton by the user
+            definition (str): Resource definition by the user
+            template (str): Resource definition template
             state (str): State of the resource in the database
         """
+        ignore_paths = set(definition.keys()) ^ set(template.keys())
+        ignore_paths.add("name")
+
         values_check_result = list(
-            diff(first=state, second=definition, ignore={"name"})
+            diff(first=state, second=definition, ignore=ignore_paths)
         )
 
         # no differences detected
@@ -254,13 +205,14 @@ class Drift:
         self,
         resource_type: str,
         definition: dict,
+        template: dict,
         state_query: str,
         name: str,
     ) -> DriftDDLContext:
         """Compare the resource definition with the resource state."""
         rsc_def = self._normalize_definition(definition)
 
-        rsc_state = self._fetch_state(state_query)
+        rsc_state = self._fetch_state(state_query, resource_type)
 
         rsc_state = self._normalize_definition(rsc_state)
 
@@ -273,5 +225,6 @@ class Drift:
 
         return self._check_state_values(
             definition=rsc_def,
+            template=template,
             state=rsc_state,
         )

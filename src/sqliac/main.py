@@ -2,33 +2,20 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from sqliac.adapters import AdapterFactory
-from sqliac.execution_plan import ExecutionPlan
+from sqliac.constants import IacAction, RunMode
 from sqliac.definitions_loader import DefinitionsLoader
+from sqliac.errors import RustyError
+from sqliac.execution_plan import ExecutionPlan
 from sqliac.providers_loader import ProviderLoader
 from sqliac.scheduler import Scheduler
-from sqliac.errors import RustyError
-from sqliac.constants import Paths, IacAction, RunMode
-
-
-def _resolve_path(path: str) -> str:
-    path_obj = Path(path)
-    working_dir = Path.cwd()
-    return str(path_obj if path_obj.is_absolute() else working_dir / path_obj)
 
 
 def run(iac_action: IacAction, run_mode: RunMode) -> None:
     """Entry point of the pipeline."""
     try:
-        definitions_path = _resolve_path(Paths.DEFINITIONS_DIR)
-        provider_path = _resolve_path(f"{Paths.CONFIG_DIR}\\{Paths.PROVIDER_DIR}")
-
-        provider_config = ProviderLoader(provider_path).load()
-
-        rsc_definitions = DefinitionsLoader(definitions_path).load(provider_config)
-
+        provider_config = ProviderLoader.load()
+        rsc_definitions = DefinitionsLoader.load(provider_config)
         execution_plan = ExecutionPlan(rsc_definitions).build_execution_plan()
 
         adapter = AdapterFactory.get_adapter(

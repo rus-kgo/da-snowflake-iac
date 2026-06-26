@@ -1,31 +1,25 @@
-"""Command line interface for sqliac.
-
-Provides both CLI commands and programmatic API.
-
-#TODO:
-    - see dependencies of the resources (from definitions)
-    | -> use definitions_loader + execution_plan.py
-
-    - test rendering providers (simple SQL parcing)
-        - test ddl_template.sql
-        - test state.sql
-    | -> use providers_loader.py + template_engine.py
-    - init + <provider name> command to create providers folder and definitions
-"""
+"""Command line interface for sqliac."""
 
 from __future__ import annotations
 
 import argparse
 
-from sqliac import __version__, TemplateType, DDLCommand
-from sqliac.definitions_loader import DefinitionsLoader
-from sqliac.providers_loader import ProviderLoader, ResourceConfig, ProviderConfig
-from sqliac.execution_plan import ExecutionPlan
-from sqliac.template_engine import TemplateEngine
-from sqliac.errors import RustyError
+from sqliac import (
+    DDLCommand,
+    IacAction,
+    Paths,
+    RunMode,
+    TemplateType,
+    __prog_name__,
+    __version__,
+)
 from sqliac.adapters import AdapterFactory
+from sqliac.definitions_loader import DefinitionsLoader
+from sqliac.errors import RustyError
+from sqliac.execution_plan import ExecutionPlan
 from sqliac.main import run
-from sqliac import IacAction, RunMode, Paths
+from sqliac.providers_loader import ProviderConfig, ProviderLoader, ResourceConfig
+from sqliac.template_engine import TemplateEngine
 
 
 def _validate_inputs(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
@@ -33,16 +27,16 @@ def _validate_inputs(parser: argparse.ArgumentParser, args: argparse.Namespace) 
         if args.template == "ddl" and not args.operation:
             print("error: DDL compilation requires an operation\n")
             parser.print_help()
-            return
+            exit()
 
         if args.template == "state" and args.operation:
             print("error: state compilation does not accept an operation\n")
             parser.print_help()
-            return
+            exit()
         if not args.template and not args.operation:
             print("error: compile command requires the type of template\n")
             parser.print_help()
-            return
+            exit()
 
 
 def _build_drift_ddl_context(resource_config: ResourceConfig, command: str) -> dict:
@@ -69,24 +63,24 @@ def _parse_resource_config(provider_config: ProviderConfig, resource_type: str):
     if not resource_config:
         raise RustyError(
             error=f"`{resource_type}` config is missing",
-            file=f"{Paths.CONFIG_DIR}\\{Paths.PROVIDER_DIR}",
+            file=str(Paths.PROVIDER_CONFIG_FILE),
         )
     if not resource_config.ddl_context:
         raise RustyError(
             error=f"the `{resource_type}` DDL context is empty",
-            file=f"{Paths.CONFIG_DIR}\\{Paths.PROVIDER_DIR}",
+            file=str(Paths.PROVIDER_CONFIG_FILE),
         )
 
     if not resource_config.ddl_template:
         raise RustyError(
             error=f"the `{resource_type}` DDL template SQL file is empty",
-            file=f"{Paths.PROVIDER_DIR}\\{resource_type}\\{Paths.DDL_TEMPLATE_FILE}",
+            file=str(Paths.ddl_template_file(resource_type)),
         )
 
     if not resource_config.state_query:
         raise RustyError(
             error=f"the `{resource_type}` state query SQL file is empty",
-            file=f"{Paths.PROVIDER_DIR}\\{resource_type}\\{Paths.STATE_FILE}",
+            file=str(Paths.state_file(resource_type)),
         )
     return resource_config
 
@@ -94,7 +88,10 @@ def _parse_resource_config(provider_config: ProviderConfig, resource_type: str):
 def _cmd_compile(args: argparse.Namespace) -> None:
     """Render a provider SQL template using its example definition."""
     template_engine = TemplateEngine()
-    provider_config = ProviderLoader(f"{Paths.CONFIG_DIR}\\{Paths.PROVIDER_DIR}").load()
+    # TODO: the provider load does validation of all resources, not only the one
+    # in the args, the command uv run sqliac compile --ddl create alert will fail
+    # on stage not alert
+    provider_config = ProviderLoader.load()
 
     resource_config = _parse_resource_config(provider_config, args.target)
 
@@ -105,7 +102,7 @@ def _cmd_compile(args: argparse.Namespace) -> None:
             sql = template_engine.render(
                 resource_config.ddl_template, args.template, ddl_context
             )
-            template_engine.print_sql(sql, provider_config.name)
+            template_engine.print_sql(sql)
 
     elif (
         args.template == TemplateType.DDL and args.operation in DDLCommand.executable()
@@ -114,13 +111,13 @@ def _cmd_compile(args: argparse.Namespace) -> None:
         sql = template_engine.render(
             resource_config.ddl_template, args.template, ddl_context
         )
-        template_engine.print_sql(sql, provider_config.name)
+        template_engine.print_sql(sql)
 
     elif args.template == TemplateType.STATE and not args.operation:
         sql = template_engine.render(
             resource_config.state_query, args.template, resource_config.ddl_context
         )
-        template_engine.print_sql(sql, provider_config.name)
+        template_engine.print_sql(sql)
 
 
 def _cmd_list() -> None:
@@ -138,8 +135,8 @@ def _cmd_init() -> None:
 
 def _cmd_graph() -> None:
     """Print dependency graph from definitions."""
-    provider_config = ProviderLoader(f"{Paths.CONFIG_DIR}\\{Paths.PROVIDER_DIR}").load()
-    rsc_definitions = DefinitionsLoader(Paths.DEFINITIONS_DIR).load(provider_config)
+    provider_config = ProviderLoader.load()
+    rsc_definitions = DefinitionsLoader.load(provider_config)
     ExecutionPlan(rsc_definitions).generate_dot_graph()
 
 
@@ -147,10 +144,10 @@ def _cmd_run(args: argparse.Namespace) -> None:
     run(iac_action=args.command, run_mode=args.run_mode)
 
 
-def main(prog_name) -> None:
+def main() -> None:
     """Parse CLI inputs and execute commands."""
     parser = argparse.ArgumentParser(
-        prog=prog_name,
+        prog=__prog_name__,
         description="SQL Infrastructure as Code tool.",
     )
 

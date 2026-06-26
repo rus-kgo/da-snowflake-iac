@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from collections import deque
-from typing import Any
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
-from sqliac.errors import RustyError
 from sqliac.constants import Paths
+from sqliac.errors import RustyError
 
 
 @dataclass
@@ -173,10 +173,8 @@ class ExecutionPlan:
             )
 
     @staticmethod
-    def _resolve_path(path: str) -> str:
-        path_obj = Path(path)
-        working_dir = Path.cwd()
-        return str(path_obj if path_obj.is_absolute() else working_dir / path_obj)
+    def _resolve_path(path: Path) -> str:
+        return str(path if path.is_absolute() else Path.cwd() / path)
 
     def generate_dot_graph(self) -> None:
         """Generate the dependencies graph and save as DOT text file."""

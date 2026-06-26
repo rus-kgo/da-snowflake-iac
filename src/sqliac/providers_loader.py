@@ -86,6 +86,10 @@ class ProviderConfig:
         return asdict(self)
 
 
+def _resolve_path(path: Path):
+    return path if path.is_absolute() else Path.cwd() / path
+
+
 class ProviderLoader:
     """Loads a provider directory into a ProviderConfig."""
 
@@ -98,14 +102,20 @@ class ProviderLoader:
 
     @classmethod
     def _load_config(cls) -> tuple:
-        if not Paths.PROVIDER_CONFIG_FILE.is_file():
+        target_dir = (
+            Paths.PROVIDER_CONFIG_FILE
+            if Paths.PROVIDER_CONFIG_FILE.is_absolute()
+            else Path.cwd() / Paths.PROVIDER_CONFIG_FILE
+        )
+
+        if not target_dir.is_file():
             raise RustyError(
                 error="missing `config.toml`",
-                file=str(Paths.PROVIDER_CONFIG_FILE),
+                file=str(target_dir),
                 help="run `sqliac init` to create scafolding with required files",
             )
 
-        with open(Paths.PROVIDER_CONFIG_FILE, "rb") as f:
+        with open(target_dir, "rb") as f:
             config_data = tomllib.load(f)
 
         provider_name = next(iter(config_data))
@@ -122,7 +132,7 @@ class ProviderLoader:
         if not resources_raw:
             raise RustyError(
                 error=f"`{provider_name}` config contains no resources",
-                file=str(Paths.PROVIDER_CONFIG_FILE),
+                file=str(target_dir),
                 help="""`config.toml` example below
 ```toml
 [snowflake.table.ddl_command]
@@ -160,12 +170,17 @@ schema = ["exmpl_sch_one"]
                     file=str(Paths.state_file(resource_type)),
                 )
 
+            config_file_path = (
+                Paths.PROVIDER_CONFIG_FILE
+                if Paths.PROVIDER_CONFIG_FILE.is_absolute()
+                else Path.cwd() / Paths.PROVIDER_CONFIG_FILE
+            )
             resources[resource_type] = ResourceConfig(
                 ddl_template=cls._read_sql(Paths.ddl_template_file(resource_type)),
                 state_query=cls._read_sql(Paths.state_file(resource_type)),
                 ddl_command=config.get("ddl_command", {}),
                 ddl_context=config.get("ddl_context", {}),
-                config_file_path=str(Paths.PROVIDER_CONFIG_FILE),
+                config_file_path=str(config_file_path),
                 resource_type=resource_type,
             )
 
@@ -189,9 +204,10 @@ schema = ["exmpl_sch_one"]
     @classmethod
     def init_providers(cls):
         """Create providers scaffolding."""
-        source_dir = files(Paths.TEMPLATES_ANCHOR).joinpath(Paths.PROVIDER_DIR)
+        source_dir = files(Paths.TEMPLATES_ANCHOR) / Paths.PROVIDER_DIR
 
-        target_dir = Path(f"{Paths.CONFIG_DIR}\\{Paths.PROVIDER_DIR}")
+        target_dir = _resolve_path(Paths.CONFIG_DIR / Paths.PROVIDER_DIR)
+
         target_dir.mkdir(parents=True, exist_ok=True)
 
         cls._copy_resources(source_dir, target_dir)
