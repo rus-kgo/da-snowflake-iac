@@ -101,9 +101,12 @@ class Drift:
             if key not in {"depends_on", "wait_time"}
         }
 
-        return {
+        ddl_context_clean = {
             key: self.sanitizer.deep_clean(value) for key, value in ddl_context.items()
         }
+        logger.debug(f"definition args and values: {ddl_context_clean}")
+
+        return ddl_context_clean
 
     def _fetch_state(self, query: str, resource_type: str) -> dict:
         """Fetch the resource state as a dictionary."""
@@ -144,12 +147,14 @@ class Drift:
             template(dict): Resource definition template
             state(dict): State of the resource in the database
         """
-        invalid_state_keys = set(state.keys()) ^ set(
-            (template.keys() - {"wait_time", "depends_on", "name"})
-        )
-        logger.debug(f"state output vs ddl_cotext in the config:{invalid_state_keys}")
+        logger.debug(f"state output args: {state.keys()}")
+        logger.debug(f"definition args: {definition.keys()}")
 
-        if invalid_state_keys:
+        invalid_state_keys = set(
+            (template.keys() - {"wait_time", "depends_on", "name"})
+        ) - set(state.keys())
+
+        if state and invalid_state_keys:
             invalid_state_keys_str = "\n".join(f"  - {k}" for k in invalid_state_keys)
             raise RustyError(
                 error=f"invalid or missing '{name}' state output arguments",
@@ -162,7 +167,6 @@ class Drift:
         invalid_defin_keys = (
             (set(definition.keys()) - {"name"}) - set(state.keys()) if state else None
         )
-        logger.debug(f"state output vs definition args:{invalid_defin_keys}")
 
         if invalid_defin_keys:
             invalid_defin_keys_str = "\n".join(f"  - {k}" for k in invalid_defin_keys)
@@ -190,6 +194,7 @@ class Drift:
         values_check_result = list(
             diff(first=state, second=definition, ignore=ignore_paths)
         )
+        logger.debug(f"state drift from the definition: {values_check_result}")
 
         # no differences detected
         if not values_check_result:
@@ -201,33 +206,44 @@ class Drift:
             ddl_command=DDLCommand.ALTER,
             name=definition.get("name", ""),
         )
+
+        # If the state is empty, it's a CREATE operation
+        if any(
+            action == "add" and path == "" for action, path, _ in values_check_result
+        ):
+            return DriftDDLContext(
+                add=definition,
+                ddl_command=DDLCommand.CREATE,
+                name=definition.get("name", ""),
+            )
+
+        drift_ddl_context = DriftDDLContext(
+            ddl_command=DDLCommand.ALTER, name=definition.get("name", "")
+        )
+
         for action, path, details in values_check_result:
-            # the state output is and empty dictionary - the object does not exsists
-            if action == "add" and path == "":
-                return DriftDDLContext(
-                    add=definition,
-                    ddl_command=DDLCommand.CREATE,
-                    name=definition.get("name", ""),
-                )
+            # Case A: Attribute change inside a list item (e.g., columns[0].type)
+            # Result: ('change', ['columns', 0, 'type'], ('INT', 'VARCHAR'))
+            if isinstance(path, list):
+                root_key = path[0]
+                if len(path) >= 2:
+                    idx = path[1]
+                    # We want to pass the WHOLE item (the whole column object)
+                    # so the template can reference column.name, column.type, etc.
+                    value = definition[root_key][idx]
+                    drift_ddl_context.append(action, root_key, value)
+                else:
+                    # Top level change within a dict
+                    drift_ddl_context[action][root_key] = details[1]
 
-            # ('change', ['columns', 1, 'name'], ('state change', 'COLUMN2')),
-            if isinstance(path, list) and len(path) >= 2:  # noqa: PLR2004
-                key, idx = path[0], path[1]
-
-                # accept definition-side value only
-                value = definition[key][idx]
-
-                drift_ddl_context.append(action, key, value)
-
+            # Case B: Whole items added/removed from a list
+            # Result: ('add', 'columns', [(2, {'name': 'NEW_COL', ...})])
             elif isinstance(path, str):
-                # ('change', 'database', ('MAIN', 'NEW'))
                 if action == "change":
                     drift_ddl_context[action][path] = details[1]
-
-                # ('add', 'columns', [(2, {...})])
                 elif action in {"add", "remove"}:
+                    # details is a list of (index, value)
                     added_items = [value for _, value in details]
-
                     drift_ddl_context.extend_values(action, path, added_items)
 
         return drift_ddl_context
