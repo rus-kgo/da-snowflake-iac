@@ -7,6 +7,7 @@ Drift is the term for when the real-world state of your infrastructure differs f
 from __future__ import annotations
 
 import json
+import logging
 from dataclasses import asdict, dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -19,6 +20,8 @@ from sqliac import DDLCommand
 from sqliac.constants import Paths
 from sqliac.errors import RustyError
 from sqliac.value_sanitizer import ValueSanitizer
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -108,6 +111,8 @@ class Drift:
         if not row:
             return {}
 
+        logger.debug(f"state query output:{row}")
+
         json_str = row[0] if isinstance(row, tuple) and len(row) > 0 else None
         if not json_str:
             raise RustyError(
@@ -124,23 +129,49 @@ class Drift:
             raise RustyError(
                 error="failed to parse JSON from database query result.",
                 file=str(Paths.state_file(resource_type)),
-                details=f"attempted to parse: {json_str[:200]}...",
+                details=f"attempted to parse: {json_str}",
             ) from err
 
     @staticmethod
     def _check_state_keys(
-        resource_type: str, definition: dict, state: dict, name: str
+        resource_type: str, definition: dict, template: dict, state: dict, name: str
     ) -> None:
-        """Check state and definition keys match."""
-        invalid_keys = set(definition.keys()) - set(state.keys()) if state else None
+        """Check state and definition keys match.
 
-        if invalid_keys:
-            invalid_keys_str = "\n".join(f"  - {k}" for k in invalid_keys)
+        Args:
+            resource_type(str): Resource type (e.g. database)
+            definition(dict): Resource definition by the user
+            template(dict): Resource definition template
+            state(dict): State of the resource in the database
+        """
+        invalid_state_keys = set(state.keys()) ^ set(
+            (template.keys() - {"wait_time", "depends_on", "name"})
+        )
+        logger.debug(f"state output vs ddl_cotext in the config:{invalid_state_keys}")
+
+        if invalid_state_keys:
+            invalid_state_keys_str = "\n".join(f"  - {k}" for k in invalid_state_keys)
+            raise RustyError(
+                error=f"invalid or missing '{name}' state output arguments",
+                file=str(Paths.state_file(resource_type)),
+                help=f"""review the arguments in your state query and config DDL context
+{invalid_state_keys_str}""",
+                note="the state query output must match the DDL context in the config",
+            ) from None
+
+        invalid_defin_keys = (
+            (set(definition.keys()) - {"name"}) - set(state.keys()) if state else None
+        )
+        logger.debug(f"state output vs definition args:{invalid_defin_keys}")
+
+        if invalid_defin_keys:
+            invalid_defin_keys_str = "\n".join(f"  - {k}" for k in invalid_defin_keys)
             raise RustyError(
                 error=f"invalid or missing '{name}' definition arguments",
                 file=str(Paths.DEFINITIONS_DIR / f"{resource_type}.toml"),
                 help=f"""add the missing arguments to your definition file or remove invalid ones
-{invalid_keys_str}""",
+{invalid_defin_keys_str}""",
+                note="the state query output must match the definition arguments",
             ) from None
 
     def _check_state_values(
@@ -219,6 +250,7 @@ class Drift:
         self._check_state_keys(
             definition=rsc_def,
             resource_type=resource_type,
+            template=template,
             state=rsc_state,
             name=name,
         )
