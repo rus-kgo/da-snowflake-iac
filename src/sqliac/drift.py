@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import asdict, dataclass, field
+from pprint import pformat
 from typing import TYPE_CHECKING, Any
 
 from dictdiffer import diff
@@ -104,7 +105,6 @@ class Drift:
         ddl_context_clean = {
             key: self.sanitizer.deep_clean(value) for key, value in ddl_context.items()
         }
-        logger.debug(f"definition args and values: {ddl_context_clean}")
 
         return ddl_context_clean
 
@@ -114,7 +114,9 @@ class Drift:
         if not row:
             return {}
 
-        logger.debug(f"state query output:{row}")
+        logger.info(
+            f"state query output:\n{pformat(row, indent=2, width=80, compact=True, sort_dicts=False)}"
+        )
 
         json_str = row[0] if isinstance(row, tuple) and len(row) > 0 else None
         if not json_str:
@@ -139,44 +141,63 @@ class Drift:
     def _check_state_keys(
         resource_type: str, definition: dict, template: dict, state: dict, name: str
     ) -> None:
-        """Check state and definition keys match.
+        """Check state and definition keys match, including nested list items."""
 
-        Args:
-            resource_type(str): Resource type (e.g. database)
-            definition(dict): Resource definition by the user
-            template(dict): Resource definition template
-            state(dict): State of the resource in the database
-        """
-        logger.debug(f"state output args: {state.keys()}")
-        logger.debug(f"definition args: {definition.keys()}")
+        # 1. Check Top-Level State Keys
+        # We expect the state to have everything defined in the provider template
+        expected_top_keys = set(template.keys()) - {"wait_time", "depends_on", "name"}
+        actual_state_keys = set(state.keys())
+        missing_from_state = expected_top_keys - actual_state_keys
 
-        invalid_state_keys = set(
-            (template.keys() - {"wait_time", "depends_on", "name"})
-        ) - set(state.keys())
-
-        if state and invalid_state_keys:
-            invalid_state_keys_str = "\n".join(f"  - {k}" for k in invalid_state_keys)
+        if state and missing_from_state:
             raise RustyError(
-                error=f"invalid or missing '{name}' state output arguments",
+                error=f"the state query for '{name}' is missing top-level arguments",
                 file=str(Paths.state_file(resource_type)),
-                help=f"""review the arguments in your state query and config DDL context
-{invalid_state_keys_str}""",
-                note="the state query output must match the DDL context in the config",
-            ) from None
+                help="Your SQL state query must return these keys in the JSON:\n"
+                + "\n".join(f"  - {k}" for k in missing_from_state),
+                note="The DDL template expects these keys to decide if an ALTER is needed.",
+            )
 
-        invalid_defin_keys = (
-            (set(definition.keys()) - {"name"}) - set(state.keys()) if state else None
-        )
+        # 2. Check Nested Keys (e.g., columns)
+        # If the template has a list of objects, the state must match that object schema
+        for key, value in template.items():
+            if (
+                isinstance(value, list)
+                and len(value) > 0
+                and isinstance(value[0], dict)
+            ):
+                # This is a list of objects (like 'columns')
+                expected_nested_keys = set(value[0].keys())
 
-        if invalid_defin_keys:
-            invalid_defin_keys_str = "\n".join(f"  - {k}" for k in invalid_defin_keys)
+                # Check the state's version of this list
+                state_items = state.get(key, [])
+                if state_items and isinstance(state_items[0], dict):
+                    actual_nested_keys = set(state_items[0].keys())
+                    missing_nested = expected_nested_keys - actual_nested_keys
+
+                    if missing_nested:
+                        raise RustyError(
+                            error=f"missing nested attributes in '{key}' for resource '{name}'",
+                            file=str(Paths.state_file(resource_type)),
+                            details=f"The list '{key}' in your state query output is missing fields.",
+                            help=f"Update your SQL state query to include these fields inside the '{key}' objects:\n"
+                            + "\n".join(f"  - {k}" for k in missing_nested),
+                            note=f"Without these fields, the tool will always think '{key}' has drifted.",
+                        )
+
+        # 3. Check Definition vs State
+        # Ensure the user didn't put something in their TOML that the SQL query isn't tracking
+        user_keys = set(definition.keys()) - {"name", "depends_on", "wait_time"}
+        untracked_keys = user_keys - actual_state_keys
+
+        if state and untracked_keys:
             raise RustyError(
-                error=f"invalid or missing '{name}' definition arguments",
+                error=f"definition for '{name}' contains untracked arguments",
                 file=str(Paths.DEFINITIONS_DIR / f"{resource_type}.toml"),
-                help=f"""add the missing arguments to your definition file or remove invalid ones
-{invalid_defin_keys_str}""",
-                note="the state query output must match the definition arguments",
-            ) from None
+                help="These arguments exist in your definition but are not returned by the state query:\n"
+                + "\n".join(f"  - {k}" for k in untracked_keys),
+                note="The drift detector cannot verify these fields because the state query ignores them.",
+            )
 
     def _check_state_values(
         self, state: dict, definition: dict, template: dict
@@ -191,10 +212,14 @@ class Drift:
         ignore_paths = set(definition.keys()) ^ set(template.keys())
         ignore_paths.add("name")
 
+        # Fill in missing values in the user definition from state args and values
+
         values_check_result = list(
             diff(first=state, second=definition, ignore=ignore_paths)
         )
-        logger.debug(f"state drift from the definition: {values_check_result}")
+        logger.info(
+            f"state drift from the definition:\n{pformat(values_check_result, indent=2, width=80, compact=True, sort_dicts=False)}"
+        )
 
         # no differences detected
         if not values_check_result:
@@ -222,27 +247,37 @@ class Drift:
         )
 
         for action, path, details in values_check_result:
-            # Case A: Attribute change inside a list item (e.g., columns[0].type)
-            # Result: ('change', ['columns', 0, 'type'], ('INT', 'VARCHAR'))
+            # Determine if this is a nested modification
+            # If path is like ['any_list', 0, 'any_key'], it's a change to an existing item
+            is_nested_item = (
+                isinstance(path, list) and len(path) >= 2 and isinstance(path[1], int)
+            )
+
+            # DYNAMIC RE-MAPPING:
+            # If we are adding a property to an existing list item, treat it as a 'change'
+            current_action = (
+                "change" if (action == "add" and is_nested_item) else action
+            )
+
             if isinstance(path, list):
                 root_key = path[0]
-                if len(path) >= 2:
+                if is_nested_item:
                     idx = path[1]
-                    # We want to pass the WHOLE item (the whole column object)
-                    # so the template can reference column.name, column.type, etc.
+                    # Grab the whole item definition (e.g., the whole Column dict)
+                    # so the template has all the context it needs to render the ALTER
                     value = definition[root_key][idx]
-                    drift_ddl_context.append(action, root_key, value)
+                    drift_ddl_context.append(current_action, root_key, value)
                 else:
-                    # Top level change within a dict
-                    drift_ddl_context[action][root_key] = details[1]
+                    # Attribute change at the top level of the resource
+                    # e.g., ('change', 'comment', (old, new))
+                    drift_ddl_context[current_action][root_key] = details[1]
 
-            # Case B: Whole items added/removed from a list
-            # Result: ('add', 'columns', [(2, {'name': 'NEW_COL', ...})])
             elif isinstance(path, str):
+                # Case: Top level attribute or whole item added/removed
                 if action == "change":
                     drift_ddl_context[action][path] = details[1]
                 elif action in {"add", "remove"}:
-                    # details is a list of (index, value)
+                    # details is a list of (index, value) for brand new items
                     added_items = [value for _, value in details]
                     drift_ddl_context.extend_values(action, path, added_items)
 
@@ -258,6 +293,9 @@ class Drift:
     ) -> DriftDDLContext:
         """Compare the resource definition with the resource state."""
         rsc_def = self._normalize_definition(definition)
+        logger.info(
+            f"definition args and values:\n{pformat(rsc_def, indent=2, width=80, compact=True, sort_dicts=False)}"
+        )
 
         rsc_state = self._fetch_state(state_query, resource_type)
 
