@@ -1,20 +1,18 @@
-SELECT object_construct(
-    'name', table_name,
-    'database', table_catalog,
-    'schema', table_schema,
-    'comment', comment,
-    'columns', array_agg(
-        object_construct(
-            'name', column_name,
-            'type', data_type,
-            'nullable', is_nullable = 'YES'
-        )
-        ORDER BY ordinal_position
-    )
-) AS table_metadata
-FROM information_schema.columns
-WHERE table_name = '{{ name }}'
-  AND table_schema = '{{ schema }}'
-  AND table_catalog = '{{ database }}'
-GROUP BY table_catalog, table_schema, table_name, comment
+{% set name_parts = name.split('.') %}
+
+SELECT object_construct_keep_null(
+    'columns', array_agg(object_construct_keep_null(
+        'name', "COLUMN_NAME",
+        'type', CASE WHEN DATA_TYPE = 'TEXT' THEN 'VARCHAR'
+                ELSE DATA_TYPE END,
+        'nullable', "IS_NULLABLE",
+        'comment', comment
+        )) within GROUP (ORDER BY "ORDINAL_POSITION")
+    ) AS table_metadata
+FROM {{ name_parts[0] }}.information_schema.columns
+WHERE TABLE_NAME = '{{ name_parts[2] }}'
+  AND table_schema = '{{ name_parts[1] }}'
+GROUP BY table_catalog,
+         table_schema,
+         TABLE_NAME
 LIMIT 1;
