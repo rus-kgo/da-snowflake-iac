@@ -7,7 +7,6 @@ dependencies = [
     "rich",
     "sqlparse",
     "dictdiffer",
-    "icecream>=2.2.0",
 ]
 
 [project.optional-dependencies]
