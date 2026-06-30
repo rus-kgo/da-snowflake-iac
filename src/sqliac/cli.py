@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 
 from sqliac import (
     DDLCommand,
@@ -27,16 +28,16 @@ def _validate_inputs(parser: argparse.ArgumentParser, args: argparse.Namespace) 
         if args.template == "ddl" and not args.operation:
             print("error: DDL compilation requires an operation\n")
             parser.print_help()
-            exit()
+            exit(1)
 
         if args.template == "state" and args.operation:
             print("error: state compilation does not accept an operation\n")
             parser.print_help()
-            exit()
+            exit(1)
         if not args.template and not args.operation:
             print("error: compile command requires the type of template\n")
             parser.print_help()
-            exit()
+            exit(1)
 
 
 def _build_drift_ddl_context(resource_config: ResourceConfig, command: str) -> dict:
@@ -95,29 +96,24 @@ def _cmd_compile(args: argparse.Namespace) -> None:
 
     resource_config = _parse_resource_config(provider_config, args.target)
 
-    if args.template == TemplateType.DDL and not args.operation:
-        for command in DDLCommand.executable():
-            ddl_context = _build_drift_ddl_context(resource_config, command)
-
-            sql = template_engine.render(
-                resource_config.ddl_template, args.template, ddl_context
-            )
-            template_engine.print_sql(sql)
-
-    elif (
-        args.template == TemplateType.DDL and args.operation in DDLCommand.executable()
-    ):
+    if args.template == TemplateType.DDL and args.operation in DDLCommand.executable():
         ddl_context = _build_drift_ddl_context(resource_config, args.operation)
         sql = template_engine.render(
-            resource_config.ddl_template, args.template, ddl_context
+            template=resource_config.ddl_template,
+            rsc_type=args.target,
+            template_type=args.template,
+            context=ddl_context,
         )
-        template_engine.print_sql(sql)
+        print(template_engine.pretty_sql(sql))
 
     elif args.template == TemplateType.STATE and not args.operation:
         sql = template_engine.render(
-            resource_config.state_query, args.template, resource_config.ddl_context
+            template=resource_config.state_query,
+            rsc_type=args.target,
+            template_type=args.template,
+            context=resource_config.ddl_context,
         )
-        template_engine.print_sql(sql)
+        print(template_engine.pretty_sql(sql))
 
 
 def _cmd_list() -> None:
@@ -144,11 +140,42 @@ def _cmd_run(args: argparse.Namespace) -> None:
     run(iac_action=args.command, run_mode=args.run_mode)
 
 
+def _setup_logging(log: str, log_out: str):
+    """Configures global logging for the application."""
+    handlers: list[logging.Handler] = [logging.StreamHandler()]
+    level = log.upper() if log else log_out.upper()
+    if log_out:
+        file_handler = logging.FileHandler("sqliac.log", mode="a", encoding="utf-8")
+        handlers.append(file_handler)
+
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s|%(name)s|%(lineno)d|%(levelname)s: %(message)s",
+        handlers=handlers,
+        force=True,
+    )
+
+
 def main() -> None:
     """Parse CLI inputs and execute commands."""
     parser = argparse.ArgumentParser(
         prog=__prog_name__,
         description="SQL Infrastructure as Code tool.",
+    )
+
+    parser.add_argument(
+        "--log",
+        nargs="?",
+        default="CRITICAL",
+        help="enable logging.",
+        choices=["info", "debug"],
+    )
+    parser.add_argument(
+        "--log-out",
+        nargs="?",
+        default="CRITICAL",
+        help="log output to file.",
+        choices=["info", "debug"],
     )
 
     subparsers = parser.add_subparsers(dest="command")
@@ -208,6 +235,7 @@ def main() -> None:
     args = parser.parse_args()
 
     _validate_inputs(compile_parser, args)
+    _setup_logging(args.log, args.log_out)
 
     try:
         if args.command == "graph":
@@ -223,4 +251,8 @@ def main() -> None:
         else:
             print(f"SQL IaC {__version__}")
     except RustyError as err:
-        err.print()
+        print(err)
+        exit(1)
+    except Exception as err:
+        logging.critical(f"unexpected system error: {err}", exc_info=True)
+        exit(1)
