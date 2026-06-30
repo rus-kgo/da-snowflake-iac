@@ -8,8 +8,6 @@ from pathlib import Path
 from tomllib import TOMLDecodeError
 from typing import TYPE_CHECKING, Any
 
-from dictdiffer import diff
-
 from sqliac.constants import Paths
 from sqliac.errors import RustyError
 
@@ -119,38 +117,71 @@ class DefinitionsLoader:
 
     @staticmethod
     def _check_definition_keys(resource_type, definition, template) -> None:
-        """Validate definition keys against template."""
-        keys_check_result = list(diff(first=template, second=definition))
+        """Recursively validate definition keys against the template schema."""
 
-        invalid_keys = set()
+        def find_invalid_keys(user_data, tpl_data, path=""):
+            """Recursive helper to find keys in user_data missing from tpl_data."""
+            invalids = []
 
-        for action, path, details in keys_check_result:
-            if path != "":
-                continue
+            # Reserved keys allowed at the top level
+            reserved_keys = {"name", "depends_on", "wait_time"}
 
-            if action == "add":
-                for tpl in details:
-                    key = tpl[0] if len(tpl) > 1 else None
-                    invalid_keys.add(key)
+            if isinstance(user_data, dict):
+                # If template is not a dict but user provided one, it's a structural error
+                # but we'll focus on missing keys.
+                tpl_dict = tpl_data if isinstance(tpl_data, dict) else {}
 
-        expected_keys_str = "\n  - ".join(set(template.keys()))
+                for k, v in user_data.items():
+                    # Allow reserved keys at the root, otherwise check against template
+                    if path == "" and k in reserved_keys:
+                        continue
 
+                    if k not in tpl_dict:
+                        # This key is not in our schema!
+                        full_path = f"{path}.{k}" if path else k
+                        invalids.append(full_path)
+                    elif k in tpl_dict:
+                        # Key is valid, now check its children recursively
+                        full_path = f"{path}.{k}" if path else k
+                        invalids.extend(find_invalid_keys(v, tpl_dict[k], full_path))
+
+            elif isinstance(user_data, list):
+                # For lists, we compare every user item against the first item in the template
+                # (The template list acts as a 'schema' for its items)
+                if isinstance(tpl_data, list) and len(tpl_data) > 0:
+                    tpl_item_schema = tpl_data[0]
+                    for i, item in enumerate(user_data):
+                        invalids.extend(
+                            find_invalid_keys(item, tpl_item_schema, f"{path}[{i}]")
+                        )
+
+            return invalids
+
+        # 1. Mandatory 'name' check
         if "name" not in definition:
             raise RustyError(
-                error="mising `name` argument in the definition",
-                file=f".\\{resource_type}.toml",
-                help=f"""review arguments for each definition of the resource\n
-expected arguments:\n  - {expected_keys_str}\n""",
+                error="missing 'name' argument",
+                file=str(Paths.DEFINITIONS_DIR / f"{resource_type}.toml"),
+                help="every resource definition must have a 'name' property.",
             )
-        if invalid_keys:
-            invalid_keys_str = "\n  - ".join(invalid_keys)
+
+        # 2. Deep Validation
+        invalid_paths = find_invalid_keys(definition, template)
+
+        if invalid_paths:
+            # Format paths for the error message
+            # e.g. columns[1].default
+            invalid_keys_str = "\n    - ".join(invalid_paths)
+
             raise RustyError(
                 error="invalid definition arguments",
-                file=f".\\{resource_type}.toml",
-                details=f"""`{definition["name"]}` definition\n
-invalid arguments:\n  - {invalid_keys_str if invalid_keys_str else "None"}\n
-expected arguments:\n  - {expected_keys_str}""",
-                help="review arguments for each definition of the resource",
+                file=str(Paths.DEFINITIONS_DIR / f"{resource_type}.toml"),
+                details=f"""resource named '{definition["name"]}'
+
+  The following arguments are not recognized by the provider:
+    - {invalid_keys_str}""",
+                help=f"check your '{resource_type}' definition against the provider's DDL template.",
+                note="only keys defined in the provider's ddl_context are permitted.",
             )
 
     @classmethod
