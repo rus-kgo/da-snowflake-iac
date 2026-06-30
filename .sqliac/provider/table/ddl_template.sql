@@ -1,36 +1,56 @@
-{% set add = add | default({}) %}
-{% set change = change | default({}) %}
-{% set remove = remove | default({}) %}
-
--- use add.<field> for new resource values
--- use change.<field> when altering an existing object
--- use remove.<field> when removing items
+{# 1. Setup variables using our new 'pick' filter #}
+{% set comment = 'comment' | pick(add, change) %}
+{% set add_cols = add.get('columns', []) %}
+{% set change_cols = change.get('columns', []) %}
+{% set remove_cols = remove.get('columns', []) %}
 
 {% if ddl_command.upper() == 'CREATE' %}
-CREATE TABLE {{add.database}}.{{add.schema}}.{{ add.name }}
-{% if add.columns | default(None) %} (
-{% for column in add.columns %}
-    {{ column.name }} {{ column.type }}{% if not column.nullable %} NOT NULL{% endif %}{% if not loop.last %},{% endif %}
+CREATE TABLE {{ name }}
+{% if add_cols %} (
+{% for column in add_cols %}
+    {{ column.name }} {{ column.type }}{% if column.get('nullable') == 'NO' %} NOT NULL{% endif %}
+    {% if column.get('comment') is not none %}COMMENT '{{ column.comment }}'{% endif %}{% if not loop.last %},{% endif %}
 {% endfor %}
-)
-{% endif %}
-{% if add.comment | default(None) %}
-COMMENT = '{{ add.comment }}'
-{% endif %};
+){% endif %};
 
 {% elif ddl_command.upper() == 'ALTER' %}
-{% if add.columns | default(None) %}
-{% for column in add.columns %}
-ALTER TABLE {{add.database}}.{{add.schema}}.{{ add.name }} ADD COLUMN {{ column.name }} {{ column.type }}{% if not column.nullable %} NOT NULL{% endif %};
+
+{# Handle Adding Columns #}
+
+{% for column in add_cols %}
+ALTER TABLE {{ name }} ADD COLUMN {{ column.name }} {{ column.type }}{% if not column.get('nullable', True) %} NOT NULL{% endif %}
+{% if column.get('comment') is not none %}COMMENT '{{ column.comment }}'{% endif %}{% if not loop.last %},{% endif %}
+{% endfor %};
+
+{# Handle Changing Columns #}
+{% for column in change_cols %}
+{% if column.get('type') %}
+ALTER TABLE {{ name }} ALTER COLUMN {{ column.name }} SET DATA TYPE {{ column.type }};
+{% endif %}
+
+{% if column.get('comment') is not none %}
+    ALTER TABLE {{ name }} ALTER COLUMN {{ column.name }} COMMENT '{{ column.comment }}';
+{% endif %}
+
+{% if column.get('nullable') == 'YES' %}
+ALTER TABLE {{ name }} ALTER COLUMN {{ column.name }} SET NOT NULL;
+{% elif column.get('nullable') == 'NO' %}
+ALTER TABLE {{ name }} ALTER COLUMN {{ column.name }} DROP NOT NULL;
+{% endif %}
+
+{% if column.get('new_name') %}
+ALTER TABLE {{ name }} RENAME COLUMN {{ column.name }} TO {{ column.new_name }};
+{% endif %}
 {% endfor %}
 
-{% for column in change.columns %}
-ALTER TABLE {{add.database}}.{{add.schema}}.{{ add.name }} ALTER COLUMN {{ column.name }} SET DATA TYPE {{ column.type }};
+{# Handle Removing Columns #}
+{% for column in remove_cols %}
+ALTER TABLE {{ name }} DROP COLUMN {{ column.name }};
 {% endfor %}
 
-{% for column in remove.columns %}
-ALTER TABLE {{remove.database}}.{{remove.schema}}.{{ remove.name }} DROP COLUMN {{ column.name }};
-{% endfor %}
+{# Handle Comment Change #}
+{% if change.get('comment') %}
+ALTER TABLE {{ name }} SET COMMENT = '{{ change.get('comment') }}';
 {% endif %}
 
 {% elif ddl_command.upper() == 'DROP' %}
