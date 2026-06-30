@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pprint import pformat
 from typing import TYPE_CHECKING, Any
 
@@ -44,9 +44,9 @@ class DriftDDLContext:
 
     ddl_command: DDLCommand
     name: str
-    add: dict[str, Any] = field(default_factory=dict)
-    change: dict[str, Any] = field(default_factory=dict)
-    remove: dict[str, Any] = field(default_factory=dict)
+    add: dict[str, set[frozenset]] = field(default_factory=dict)
+    change: dict[str, set[frozenset]] = field(default_factory=dict)
+    remove: dict[str, set[frozenset]] = field(default_factory=dict)
 
     def __setitem__(self, key: str, value: Any) -> None:  # noqa: D105
         if key not in {"add", "change", "remove"}:
@@ -64,22 +64,44 @@ class DriftDDLContext:
 
         return getattr(self, key)
 
-    def append(self, action: str, key: str, value: Any) -> None:  # noqa: D102
+    def add_frozen(self, action: str, key: str, value: dict) -> None:
         section = getattr(self, action)
-        section.setdefault(key, []).append(value)
+        section.setdefault(key, set()).add(frozenset(value.items()))
 
-    def extend_values(  # noqa: D102
+    def union_frozen(
         self,
         action: str,
         key: str,
-        values: list[Any],
+        values: set,
     ) -> None:
         section = self[action]
-        section.setdefault(key, []).extend(values)
+        section.setdefault(key, set()).update(values)
 
-    def to_dict(self):
-        """Return as dictionary."""
-        return asdict(self)
+    def _unfreeze_item_or_set(self, item: Any) -> Any:
+        """Helper to convert a set of frozensets to a list of dicts, or return item as is."""
+        if isinstance(item, set):
+            return [dict(frozen_item) for frozen_item in item]
+        return item
+
+    def _unfreeze_section(
+        self, section: dict[str, set[frozenset]]
+    ) -> dict[str, list[dict]]:
+        """Converts internal frozen structural sets back to normal list of dicts."""
+        return {
+            key: self._unfreeze_item_or_set(value) for key, value in section.items()
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return data class as a dictionary with frozen sets unfrozen."""
+        return {
+            "ddl_command": self.ddl_command.value
+            if hasattr(self.ddl_command, "value")
+            else self.ddl_command,
+            "name": self.name,
+            "add": self._unfreeze_section(self.add),
+            "change": self._unfreeze_section(self.change),
+            "remove": self._unfreeze_section(self.remove),
+        }
 
 
 class Drift:
@@ -266,7 +288,7 @@ class Drift:
                     # Grab the whole item definition (e.g., the whole Column dict)
                     # so the template has all the context it needs to render the ALTER
                     value = definition[root_key][idx]
-                    drift_ddl_context.append(current_action, root_key, value)
+                    drift_ddl_context.add_frozen(current_action, root_key, value)
                 else:
                     # Attribute change at the top level of the resource
                     # e.g., ('change', 'comment', (old, new))
@@ -278,8 +300,8 @@ class Drift:
                     drift_ddl_context[action][path] = details[1]
                 elif action in {"add", "remove"}:
                     # details is a list of (index, value) for brand new items
-                    added_items = [value for _, value in details]
-                    drift_ddl_context.extend_values(action, path, added_items)
+                    added_items = {frozenset(value.items()) for _, value in details}
+                    drift_ddl_context.union_frozen(action, path, added_items)
 
         return drift_ddl_context
 
