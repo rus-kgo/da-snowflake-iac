@@ -130,13 +130,29 @@ class Drift:
 
         return ddl_context_clean
 
+    def _normalize_state(self, state: Any, definition: Any) -> Any:
+        """Recursively filter state to only include keys present in definition."""
+        if isinstance(definition, dict) and isinstance(state, dict):
+            return {
+                k: self._normalize_state(state[k], v)
+                for k, v in definition.items()
+                if k in state
+            }
+        elif isinstance(definition, list) and isinstance(state, list):
+            # For lists, we align by index
+            return [
+                self._normalize_state(state[i], definition[i])
+                for i in range(min(len(state), len(definition)))
+            ]
+        return state
+
     def _fetch_state(self, query: str, resource_type: str) -> dict:
         """Fetch the resource state as a dictionary."""
         row: BaseAdapter.Row = self.connection.execute(query)
         if not row:
             return {}
 
-        logger.info(
+        logger.debug(
             f"state query output:\n{pformat(row, indent=2, width=80, compact=True, sort_dicts=False)}"
         )
 
@@ -231,15 +247,10 @@ class Drift:
             template (str): Resource definition template
             state (str): State of the resource in the database
         """
-        ignore_paths = set(definition.keys()) ^ set(template.keys())
-        ignore_paths.add("name")
-
-        # Fill in missing values in the user definition from state args and values
-
         values_check_result = list(
-            diff(first=state, second=definition, ignore=ignore_paths)
+            diff(first=state, second=definition, ignore={"name"})
         )
-        logger.info(
+        logger.debug(
             f"state drift from the definition:\n{pformat(values_check_result, indent=2, width=80, compact=True, sort_dicts=False)}"
         )
 
@@ -315,13 +326,11 @@ class Drift:
     ) -> DriftDDLContext:
         """Compare the resource definition with the resource state."""
         rsc_def = self._normalize_definition(definition)
-        logger.info(
+        logger.debug(
             f"definition args and values:\n{pformat(rsc_def, indent=2, width=80, compact=True, sort_dicts=False)}"
         )
 
         rsc_state = self._fetch_state(state_query, resource_type)
-
-        rsc_state = self._normalize_definition(rsc_state)
 
         self._check_state_keys(
             definition=rsc_def,
@@ -330,6 +339,8 @@ class Drift:
             state=rsc_state,
             name=name,
         )
+
+        rsc_state = self._normalize_state(rsc_state, rsc_def)
 
         return self._check_state_values(
             definition=rsc_def,
