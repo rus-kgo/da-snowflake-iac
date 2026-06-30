@@ -34,6 +34,24 @@ class TemplateEngine:
 
         # Register the custom filter into the environment
         self.env.filters["sql_escape"] = self._sql_escape_string
+        self.env.filters["pick"] = self._pick_value  # New Filter
+
+    def _pick_value(
+        self,
+        key: str,
+        add_dict: dict | None = None,
+        change_dict: dict | None = None,
+        remove_dict: dict | None = None,
+        default: Any = None,
+    ) -> Any:
+        """Look for a key in add, then change, then remove."""
+        dicts = [d for d in (add_dict, change_dict, remove_dict) if d is not None]
+
+        for d in dicts:
+            if key in d:
+                return d[key]
+
+        return default
 
     def _sql_escape_string(self, value: Any) -> str:
         """Custom filter to safely wrap and escape a string value for standard SQL."""
