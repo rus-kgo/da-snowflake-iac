@@ -1,45 +1,46 @@
 [[table]]
-name = "FIRST_TABLE"
-database = "MODELING"
-schema = "BI_DOMAIN"
-owner = "SYSADMIN"
-comment = "This is a table comment"
+name = "MODELING.MODELING_SCHEMA.FIRST_TABLE"
 wait_time = 0
 [table.depends_on]
 database = ["MODELING"]
+schema = ["MODELING.MODELING_SCHEMA"]
 
 [[table.columns]]
 name = "column1"
-type = "VARCHAR"
-nullable = true
+type = "varchar"
+nullable = 'NO'
 comment = "Column 1 description"
 
 [[table.columns]]
 name = "column2"
-type = "INT"
-nullable = false
-default = 0
+type = "NUMBER"
 comment = "Column 2 description"
 
 [[table.columns]]
 name = "column3"
-type = "INT"
-nullable = true
-default = 0
+type = "varchar"
 comment = "Column 3 description"
 
+[[table.columns]]
+name = "column4"
+type = "varchar"
+comment = "Column 4 description"
+
 [[table]]
-name = "SECOND_TABLE"
-database = "PRESENTATION"
-schema = "CUSTOMERS"
-owner = "SYSADMIN"
-comment = "This is a table comment"
+name = "PRESENTATION.EXAMPLE_SCHEMA.SECOND_TABLE"
 wait_time = 0
 [[table.columns]]
 name = "column1"
-type = "INT"
-nullable = true
-default = 0
+type = "NUMBER"
 comment = "Column 1 description"
+[[table.columns]]
+name = "column2"
+type = "NUMBER"
+comment = "Column 2 description"
+[[table.columns]]
+name = "column3"
+type = "NUMBER"
+comment = "Column 3 description"
 [table.depends_on]
 database = ["MODELING", "PRESENTATION"]
+schema = ["PRESENTATION.EXAMPLE_SCHEMA"]

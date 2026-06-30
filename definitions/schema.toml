@@ -1,0 +1,18 @@
+[[schema]]
+name = "MODELING.MODELING_SCHEMA"
+transient = false
+managed_access = false
+data_retention_time_in_days = 1
+comment = "Example schema"
+wait_time = 0
+[schema.depends_on]
+database = ["MODELING"]
+
+[[schema]]
+name = "PRESENTATION.EXAMPLE_SCHEMA"
+transient = false
+managed_access = false
+comment = "Example schema"
+wait_time = 0
+[schema.depends_on]
+database = ["PRESENTATION"]

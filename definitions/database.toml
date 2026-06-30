@@ -1,14 +1,12 @@
 [[database]]
 name = "MODELING"
 transient = false
-owner = "ACCOUNTADMIN"
 data_retention_time_in_days = 1
 wait_time = 0
 [database.depends_on]
 
 [[database]]
 name = "PRESENTATION"
-owner = "ACCOUNTADMIN"
 data_retention_time_in_days = 1
 [database.depends_on]
 database = ["MODELING"]
