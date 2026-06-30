@@ -214,7 +214,25 @@ class Scheduler:
     def run(self, execution_plan: ExecutionPlanResult) -> None:
         """Execute all scheduled tasks and collect errors."""
         completed = set()
-        ready = {n for n, d in execution_plan.dependency_graph.items() if not d}
+
+        if self.iac_action == IacAction.DESTROY:
+            # For DESTROY, reverse the dependency logic
+            current_deps = {
+                k: v.copy() for k, v in execution_plan.reverse_dependency_graph.items()
+            }
+            current_rev_deps = {
+                k: v.copy() for k, v in execution_plan.dependency_graph.items()
+            }
+        else:
+            # For APPLY, use original dependency logic
+            current_deps = {
+                k: v.copy() for k, v in execution_plan.dependency_graph.items()
+            }
+            current_rev_deps = {
+                k: v.copy() for k, v in execution_plan.reverse_dependency_graph.items()
+            }
+
+        ready = {n for n, d in current_deps.items() if not d}
         futures = {}
 
         with ThreadPoolExecutor(
@@ -234,7 +252,7 @@ class Scheduler:
                     completed.add(task)
 
                     # unlock downstream tasks
-                    for child in execution_plan.reverse_dependency_graph[task]:
-                        execution_plan.dependency_graph[child].remove(task)
-                        if not execution_plan.dependency_graph[child]:
+                    for child in current_rev_deps[task]:
+                        current_deps[child].remove(task)
+                        if not current_deps[child]:
                             ready.add(child)
