@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, overload
+import logging
+import re
+from pprint import pformat
+from typing import Any
 
 import sqlparse
 from jinja2 import (
@@ -12,13 +15,13 @@ from jinja2 import (
     TemplateSyntaxError,
     UndefinedError,
 )
-from rich.console import Console
-from rich.syntax import Syntax
-from rich.text import Text
 
 from sqliac import TemplateType
+from sqliac.constants import Paths
 from sqliac.errors import RustyError
 from sqliac.value_sanitizer import ValueSanitizer
+
+logger = logging.getLogger(__name__)
 
 
 class TemplateEngine:
@@ -43,14 +46,31 @@ class TemplateEngine:
     def render(
         self,
         template: str,
+        rsc_type: str,
         template_type: str,
         context: dict[str, Any] | None = None,
     ) -> str:
         """Render a Jinja2 template to SQL."""
 
-        sanitized_context = self.sanitizer.deep_clean(context or {})
+        defaults = {"add": {}, "change": {}, "remove": {}, "ddl_command": ""}
+
+        full_context = {**defaults, **(context or {})}
+        sanitized_context = self.sanitizer.deep_clean(full_context)
 
         self._validate_context(sanitized_context, template_type)
+
+        logger.info(
+            f"Jinja DDL template context:\n\
+            {
+                pformat(
+                    sanitized_context,
+                    indent=2,
+                    width=80,
+                    compact=True,
+                    sort_dicts=False,
+                )
+            }"
+        )
 
         try:
             sql_template = self.env.from_string(template)
@@ -64,19 +84,19 @@ class TemplateEngine:
             AttributeError,
         ) as err:
             lineno = getattr(err, "lineno", None)
-            line_help = (
-                f"the error is at line {lineno}" if lineno else "check your template"
-            )
+            line_help = f"the error is at line {lineno}" if lineno else ""
+            if template_type == TemplateType.STATE:
+                file = str(Paths.state_file(rsc_type))
+            elif template_type == TemplateType.DDL:
+                file = str(Paths.ddl_template_file(rsc_type))
+            else:
+                file = ""
 
             raise RustyError(
                 error="SQL+Jinja template render failed",
+                file=file,
                 details=str(err),
-                help=f"""\
-{line_help}
-```text
-{self._annotate_template(template)}
-```
-""",
+                help=line_help,
             ) from err
 
     def _validate_context(self, context: dict[str, Any], template_type: str) -> None:
