@@ -138,47 +138,17 @@ class TemplateEngine:
             f"{idx + 1:4} | {line}" for idx, line in enumerate(template.splitlines())
         )
 
-    @overload
     @staticmethod
-    def pretty_sql(sql: str, as_syntax: Literal[False] = False) -> str: ...
+    def pretty_sql(sql: str) -> str:
 
-    @overload
-    @staticmethod
-    def pretty_sql(sql: str, as_syntax: Literal[True]) -> Syntax: ...
+        sql = re.sub(r"\n+", "\n", sql)
 
-    @staticmethod
-    def pretty_sql(sql: str, as_syntax: bool = False) -> str | Syntax:
-        """Format SQL and return either a raw string or a Rich Syntax object.
-
-        Default behavior returns a formatted string.
-        """
         formatted_sql = sqlparse.format(
             sql,
-            reindent=True,
+            encoding="utf-8",
             keyword_case="upper",
             strip_comments=True,
-            strip_whitespace=True,
-            use_semicolons=True,
-            encoding="utf-8",
+            wrap_after=10,
+            use_space_around_operators=True,
         )
-
-        if not as_syntax:
-            return formatted_sql
-
-        return Syntax(
-            formatted_sql,
-            "sql",
-            theme="monokai",
-            line_numbers=True,
-            indent_guides=False,
-            padding=(0, 1),
-            word_wrap=True,
-        )
-
-    @classmethod
-    def print_sql(cls, sql: str) -> None:
-        """Parse and pretty print SQL query to the terminal."""
-        console = Console(force_terminal=True)
-        sql_pretty_syntax = cls.pretty_sql(sql, as_syntax=True)
-        console.print(Text())
-        console.print(sql_pretty_syntax)
+        return formatted_sql
