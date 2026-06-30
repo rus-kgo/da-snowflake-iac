@@ -12,12 +12,13 @@ class ValueSanitizer:
 
     MAX_DEPTH = 10
 
-    def to_string(self, value: Any, source: str = "") -> str:
+    @staticmethod
+    def to_upper_string(value: Any, source: str = "") -> str | None:
         """Convert to string."""
         if value is None:
-            return ""
+            return None
         try:
-            return str(value).strip()
+            return str(value).strip().upper()
         except (ValueError, TypeError):
             raise RustyError(
                 error="value error",
@@ -26,7 +27,8 @@ class ValueSanitizer:
                 help="check the input value for invalid characters or patterns",
             ) from None
 
-    def to_int(self, value: Any, source: str) -> int:
+    @staticmethod
+    def to_int(value: Any, source: str) -> int:
         """Convert to integer or float number."""
         if isinstance(value, int):
             return value
@@ -51,7 +53,7 @@ class ValueSanitizer:
             )
 
         if isinstance(value, str):
-            return self.to_string(value, source="nested_value")
+            return self.to_upper_string(value, source="nested_value")
 
         if isinstance(value, dict):
             return {
