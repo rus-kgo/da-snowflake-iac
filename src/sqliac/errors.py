@@ -9,10 +9,7 @@ in the style of Rust compiler diagnostics, with support for:
 - additional notes
 """
 
-from rich.console import Console
-from rich.markdown import Markdown
-from rich.syntax import Syntax
-from rich.text import Text
+from sqliac.utils import box_message
 
 
 class RustyError(Exception):
@@ -22,10 +19,10 @@ class RustyError(Exception):
         self,
         *,
         error: str,
-        details: str | Markdown | None = None,
-        file: str | Markdown | None = None,
-        help: str | Markdown | None = None,  # noqa: A002
-        note: str | Markdown | None = None,
+        details: str | None = None,
+        file: str | None = None,
+        help: str | None = None,
+        note: str | None = None,
         sql: str | None = None,
     ):
         """Initialize with structured error information.
@@ -44,54 +41,18 @@ class RustyError(Exception):
         self.note = note
         self.sql = sql
 
-        # Build plain-text message for __str__ (fallback)
         msg_lines = [f"\nerror: {error}"]
         if file:
             msg_lines.append(f"\n    --> {file}")
         if details:
             msg_lines.append(f"\ndetails: {details}")
         if sql:
-            msg_lines.append(f"\nstatement: \n{sql}")
+            msg_lines.append(f"\nstatement: {box_message(message=sql)}")
         if help:
             msg_lines.append(f"\nhelp: {help}")
         if note:
             msg_lines.append(f"\nnote: {note}")
-        super().__init__("\n".join(msg_lines))
-
-    def print(self):
-        """Print the error with Markdown rendering using Rich.
-
-        Args:
-            console: Rich Console instance for output.
-        """
-        console = Console(force_terminal=True)
-
-        console.print(Text())
-        console.print(Markdown(f"**error**: {self.error}"))
-        if self.file:
-            console.print(Text())
-            console.print(Text(f"    --> {self.file}"))
-        if self.details:
-            console.print(Text())
-            console.print(Markdown(f"**details**: {self.details}"))
-        if self.sql:
-            console.print(Text())
-            console.print(Markdown("**statement**:"))
-            console.print(
-                Syntax(
-                    self.sql,
-                    "sql",
-                    theme="monokai",
-                    line_numbers=True,
-                    indent_guides=False,
-                    padding=(0, 1),
-                    background_color=None,
-                    word_wrap=True,
-                )
-            )
-        if self.help:
-            console.print(Text())
-            console.print(Markdown(f"**help**: {self.help}"))
-        if self.note:
-            console.print(Text())
-            console.print(Markdown(f"**note**: {self.note}"))
+        msg_lines.append("\n")
+        super().__init__(
+            box_message(title="Error", message="\n".join(msg_lines), width=100)
+        )
