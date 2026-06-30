@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -9,6 +10,9 @@ from typing import Any
 
 from sqliac.constants import Paths
 from sqliac.errors import RustyError
+from sqliac.utils import box_message
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -142,27 +146,26 @@ class ExecutionPlan:
 
                 for dep in deps:
                     drsc, dname = dep.split("::")
-                    dep_lines.append(f" {line} | {drsc} = '{dname}'")
+                    dep_lines.append(f"{line} | {drsc} = '{dname}'")
                     line += 1
 
                 dep_str = "\n".join(dep_lines)
 
-                block = f"""\
-        --> {rsc}.yml
-        |
-        1 | [[{rsc}]]
-        2 | name = "{name}"
-        3 | [{rsc}.depends_on]
-        {dep_str}
-        |   ^^^^^^^^^^^^^ creates a cycle
-        |
+                block = f"""
+    --> {rsc}.yml
+    |
+    1 | [[{rsc}]]
+    2 | name = "{name}"
+    3 | [{rsc}.depends_on]
+    {dep_str}
+    |   ^^^^^^^^^^^^^ creates a cycle
+    |
         """
                 blocks.append(block)
 
             raise RustyError(
                 error="circular dependency detected",
                 details="\n".join(blocks),
-                help="resources depend on each other in a cycle",
             )
 
     @staticmethod
@@ -194,4 +197,5 @@ class ExecutionPlan:
         with open(file_path, "w", encoding="utf-8") as file:
             file.write(dot_graph_str)
 
-        print(f"info: saved dependency graph to: '{file_path}'")
+        print(box_message((f"dependency graph saved at: '{file_path}'")))
+        print(box_message(title="DAG", message=dot_graph_str))
