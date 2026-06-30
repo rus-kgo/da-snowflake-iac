@@ -2,16 +2,14 @@
 
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pprint import pformat
 from typing import TYPE_CHECKING, Any
 
-from rich.console import Console, Group
-from rich.panel import Panel
-from rich.text import Text
-
 from sqliac import DDLCommand, IacAction, RunMode, TemplateType
-from sqliac.drift import Drift
+from sqliac.drift import Drift, DriftDDLContext
 from sqliac.errors import RustyError
 from sqliac.template_engine import TemplateEngine
+from sqliac.utils import box_message
 
 if TYPE_CHECKING:
     from sqliac.adapters.base import BaseAdapter
@@ -49,57 +47,59 @@ class Scheduler:
         self,
         adapter: BaseAdapter,
         sql: str,
-        depends_on: dict[str, dict[Any, Any]],
         wait_time: int | None = None,
-    ) -> None:
+    ) -> str:
         """Execute rendered SQL template using adapter."""
-        message_lines = []
 
-        sql_pretty_syntax = TemplateEngine.pretty_sql(sql=sql, as_syntax=True)
-        if wait_time:
-            message_lines.append(
-                Text.assemble(
-                    ("wait time: ", "cyan"),
-                    (str(wait_time), ""),
-                    (" s."),
-                )
-            )
-
-        if depends_on:
-            dep_lines = "\n".join(f"- {k}: {v}" for k, v in depends_on.items())
-            message_lines.append(
-                Text.assemble(("depends on:\n", "cyan"), (dep_lines, "")),
-            )
-
+        exec_output = ""
         if self.run_mode != RunMode.DRY_RUN:
-            adapter.execute(sql)
-
-            color = "green"
-            title = "[green]Live Run[/green]"
-
-        else:
-            color = "yellow"
-            title = "[yellow]Dry Run[/yellow]"
-
-        message_lines.append(Text())
-        message_lines.append(Text("sql statement:", style=color))
-        message_lines.append(sql_pretty_syntax)
-
-        msg = Group(*message_lines)
-
-        Console(force_terminal=True).print(
-            Panel(
-                msg,
-                title=title,
-                expand=False,
-                border_style=color,
-            ),
-        )
+            exec_output = adapter.execute(sql)
+            exec_output = (
+                exec_output[0]
+                if isinstance(exec_output, tuple) and len(exec_output) > 0
+                else ""
+            )
 
         if self.run_mode != RunMode.DRY_RUN and wait_time:
             time.sleep(wait_time)
 
-    def run_task(self, task: str) -> None:  # noqa: PLR0912
+        return exec_output
+
+    def _print_execution_message(
+        self,
+        sql: str,
+        exec_output: str,
+        rsc_type: str,
+        depends_on: dict[str, dict[Any, Any]],
+        drift_ddl_context: DriftDDLContext,
+        wait_time: int | None,
+    ) -> None:
+        """Prints the message lines and title for SQL execution output."""
+        message_lines = []
+        sql_pretty_syntax = TemplateEngine.pretty_sql(sql=sql)
+
+        message_lines.append(f"resource: {rsc_type}")
+        if wait_time:
+            message_lines.append(f"wait time: {wait_time}")
+
+        if depends_on:
+            dep_lines = "\n".join(f"- {k}: {v}" for k, v in depends_on.items())
+            message_lines.append(f"depends on:\n{dep_lines}")
+
+        if not self.iac_action == IacAction.DESTROY:
+            message_lines.append(
+                f"scheduled changes:\n{pformat(drift_ddl_context.to_dict(), indent=2, expand=True, width=80, sort_dicts=False)}"
+            )
+
+        if sql:
+            message_lines.append(
+                f"\nstatement output: {exec_output}\n{box_message(title='SQL', message=sql_pretty_syntax)}"
+            )
+
+        title = "Dry Run" if self.run_mode == RunMode.DRY_RUN else "Live Run"
+        print(box_message(title=title, message="\n".join(message_lines), width=100))
+
+    def run_task(self, task: str) -> None:
         """Execute a single task with comprehensive error handling."""
         rsc_type, rsc_name = task.split(TASK_SEPARATOR)
 
@@ -109,6 +109,7 @@ class Scheduler:
 
             rsc_state_query = self.template_engine.render(
                 template=self.provider_resources[rsc_type].state_query,
+                rsc_type=rsc_type,
                 template_type=TemplateType.STATE,
                 context=ddl_context,
             )
@@ -123,21 +124,17 @@ class Scheduler:
             )
 
             # Step 3: No action needed
-            if drift_ddl_context.ddl_command == DDLCommand.NO_ACTION:
-                msg = Text.assemble(
-                    ("no changes detected in ", "cyan"),
-                    (f"'{rsc_type}' "),
-                    ("named as ", "cyan"),
-                    (f"'{rsc_name}'"),
-                )
-
-                Console(force_terminal=True).print(
-                    Panel(
-                        msg,
-                        title="[cyan]Relax[/cyan]",
-                        border_style="cyan",
-                        expand=False,
-                    )
+            if (
+                drift_ddl_context.ddl_command == DDLCommand.NO_ACTION
+                and self.iac_action == IacAction.APPLY
+            ):
+                self._print_execution_message(
+                    sql="",
+                    exec_output="",
+                    rsc_type=rsc_type,
+                    depends_on=ddl_context["depends_on"],
+                    wait_time=ddl_context.get("wait_time", None),
+                    drift_ddl_context=drift_ddl_context,
                 )
                 continue
 
@@ -149,19 +146,27 @@ class Scheduler:
 
                 render_result = self.template_engine.render(
                     template=self.provider_resources[rsc_type].ddl_template,
+                    rsc_type=rsc_type,
                     template_type=TemplateType.DDL,
                     context=drift_ddl_context.to_dict(),
                 )
 
                 try:
-                    self.execute_rendered_sql_template(
+                    exec_output = self.execute_rendered_sql_template(
                         adapter=self.conn,
                         sql=render_result,
-                        depends_on=ddl_context["depends_on"],
                         wait_time=ddl_context.get("wait_time", None),
                     )
+                    self._print_execution_message(
+                        sql=render_result,
+                        exec_output=exec_output,
+                        rsc_type=rsc_type,
+                        depends_on=ddl_context["depends_on"],
+                        wait_time=ddl_context.get("wait_time", None),
+                        drift_ddl_context=drift_ddl_context,
+                    )
                 except RustyError as err:
-                    err.print()
+                    print(err)
                 except Exception as err:
                     raise RustyError(
                         error=f"failed to execute SQL query, task: {task}",
@@ -174,6 +179,7 @@ class Scheduler:
             if self.iac_action == IacAction.DESTROY:
                 render_result = self.template_engine.render(
                     template=self.provider_resources[rsc_type].ddl_template,
+                    rsc_type=rsc_type,
                     template_type=TemplateType.DDL,
                     context={
                         "name": rsc_name,
@@ -184,11 +190,18 @@ class Scheduler:
                 )
 
                 try:
-                    self.execute_rendered_sql_template(
+                    exec_output = self.execute_rendered_sql_template(
                         adapter=self.conn,
                         sql=render_result,
+                        wait_time=ddl_context.get("wait_time", None),
+                    )
+                    self._print_execution_message(
+                        sql=render_result,
+                        rsc_type=rsc_type,
+                        exec_output=exec_output,
                         depends_on=ddl_context["depends_on"],
                         wait_time=ddl_context.get("wait_time", None),
+                        drift_ddl_context=drift_ddl_context,
                     )
                 except Exception as err:
                     raise RustyError(
