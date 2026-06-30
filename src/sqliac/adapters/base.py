@@ -111,7 +111,7 @@ class BaseAdapter(abc.ABC):
 
     def _split_statements(self, sql: str) -> list[str]:
         """Cleans syntax comments and splits batches into single statements."""
-        formatted = sqlparse.format(sql, strip_comments=True, strip_whitespace=True)
+        formatted = TemplateEngine.pretty_sql(sql)
         return [str(s).strip() for s in sqlparse.parse(formatted) if str(s).strip()]
 
     def execute(self, sql: str) -> Row:
@@ -119,20 +119,27 @@ class BaseAdapter(abc.ABC):
         statements = self._split_statements(sql)
 
         with self.connections.get_connection() as conn:
+            try:
+                cursor = conn.cursor()
+            except Exception as err:
+                raise RustyError(
+                    error="failed to get the connection cursor", details=str(err)
+                )
+
             for statement in statements:
                 try:
-                    cursor = conn.cursor()
                     if cursor:
-                        cursor.execute(sql)
-                        return self._fetch_row(cursor)
+                        cursor.execute(statement)
+                except RustyError as err:
+                    print(err)
                 except Exception as err:
-                    if isinstance(err, RustyError):
-                        err.print()
                     raise RustyError(
                         error="SQL statement execution error",
-                        sql=TemplateEngine.pretty_sql(sql=statement, as_syntax=False),
-                        help=str(err),
+                        sql=TemplateEngine.pretty_sql(sql=statement),
+                        details=str(err),
                     ) from err
+
+            return self._fetch_row(cursor)
 
     def cleanup(self) -> None:
         """Cleans up all managed connections."""
