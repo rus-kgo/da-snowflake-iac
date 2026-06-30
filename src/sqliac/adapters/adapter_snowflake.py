@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Type
@@ -11,6 +12,8 @@ from sqliac.adapters.base import BaseAdapter, BaseCredentials
 from sqliac.adapters.connection_manager import ConnectionState, ThreadConnectionManager
 from sqliac.constants import Paths
 from sqliac.errors import RustyError
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -45,14 +48,14 @@ class SnowflakeConnectionManager(ThreadConnectionManager):
         try:
             conn_kwargs = self._build_connect_args()
             account = conn_kwargs.get("account", "unknown-account")
-            print(f"info: '{account}' account connection thread: '{connection.name}'")
+            logger.info(f"'{account}' account connection thread: '{connection.name}'")
             conn = sc.connect(**conn_kwargs)
             connection.handle = conn
             connection.state = "open"
             return connection
 
         except Exception as e:
-            print(f"failed to open connection for thread {connection.name}: {e}")
+            logger.error(f"failed to open connection for thread {connection.name}: {e}")
             connection.state = "fail"
             connection.handle = None
             raise RustyError(
