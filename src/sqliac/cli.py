@@ -256,3 +256,7 @@ def main() -> None:
     except Exception as err:
         logging.critical(f"unexpected system error: {err}", exc_info=True)
         exit(1)
+
+
+if __name__ == "__main__":
+    main()
