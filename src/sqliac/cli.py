@@ -89,10 +89,7 @@ def _parse_resource_config(provider_config: ProviderConfig, resource_type: str):
 def _cmd_compile(args: argparse.Namespace) -> None:
     """Render a provider SQL template using its example definition."""
     template_engine = TemplateEngine()
-    # TODO: the provider load does validation of all resources, not only the one
-    # in the args, the command uv run sqliac compile --ddl create alert will fail
-    # on stage not alert
-    provider_config = ProviderLoader.load()
+    provider_config = ProviderLoader.load(args.target)
 
     resource_config = _parse_resource_config(provider_config, args.target)
 

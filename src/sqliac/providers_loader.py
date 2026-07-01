@@ -94,10 +94,24 @@ class ProviderLoader:
     """Loads a provider directory into a ProviderConfig."""
 
     @classmethod
-    def load(cls):
+    def load(cls, single_resource: str | None = None):
         """Load Provider configuration."""
         provider_name, resources_raw = cls._load_config()
-        resources = cls._parse_resources(resources_raw)
+
+        if single_resource:
+            if single_resource not in resources_raw:
+                raise RustyError(
+                    error=f"resource '{single_resource}' not found in config.",
+                    file=str(Paths.PROVIDER_CONFIG_FILE),
+                )
+            items_to_process = {single_resource: resources_raw[single_resource]}
+        else:
+            items_to_process = resources_raw
+
+        resources = {
+            resource_type: cls._parse_single_resource(resource_type, config)
+            for resource_type, config in items_to_process.items()
+        }
         return ProviderConfig(name=provider_name, resources=resources)
 
     @classmethod
@@ -153,38 +167,33 @@ schema = ["exmpl_sch_one"]
         return provider_name, resources_raw
 
     @classmethod
-    def _parse_resources(
-        cls, resources_raw: dict[str, dict[str, Any]]
-    ) -> dict[str, ResourceConfig]:
-        resources = {}
-
-        for resource_type, config in resources_raw.items():
-            if not Paths.ddl_template_file(resource_type).is_file():
-                raise RustyError(
-                    error=f"missing `{resource_type}` DDL template.",
-                    file=str(Paths.ddl_template_file(resource_type)),
-                )
-            if not Paths.state_file(resource_type).is_file():
-                raise RustyError(
-                    error=f"missing `{resource_type}` State template.",
-                    file=str(Paths.state_file(resource_type)),
-                )
-
-            config_file_path = (
-                Paths.PROVIDER_CONFIG_FILE
-                if Paths.PROVIDER_CONFIG_FILE.is_absolute()
-                else Path.cwd() / Paths.PROVIDER_CONFIG_FILE
+    def _parse_single_resource(
+        cls, resource_type: str, config: dict[str, Any]
+    ) -> ResourceConfig:
+        if not Paths.ddl_template_file(resource_type).is_file():
+            raise RustyError(
+                error=f"missing `{resource_type}` DDL template.",
+                file=str(Paths.ddl_template_file(resource_type)),
             )
-            resources[resource_type] = ResourceConfig(
-                ddl_template=cls._read_sql(Paths.ddl_template_file(resource_type)),
-                state_query=cls._read_sql(Paths.state_file(resource_type)),
-                ddl_command=config.get("ddl_command", {}),
-                ddl_context=config.get("ddl_context", {}),
-                config_file_path=str(config_file_path),
-                resource_type=resource_type,
+        if not Paths.state_file(resource_type).is_file():
+            raise RustyError(
+                error=f"missing `{resource_type}` State template.",
+                file=str(Paths.state_file(resource_type)),
             )
 
-        return resources
+        config_file_path = (
+            Paths.PROVIDER_CONFIG_FILE
+            if Paths.PROVIDER_CONFIG_FILE.is_absolute()
+            else Path.cwd() / Paths.PROVIDER_CONFIG_FILE
+        )
+        return ResourceConfig(
+            ddl_template=cls._read_sql(Paths.ddl_template_file(resource_type)),
+            state_query=cls._read_sql(Paths.state_file(resource_type)),
+            ddl_command=config.get("ddl_command", {}),
+            ddl_context=config.get("ddl_context", {}),
+            config_file_path=str(config_file_path),
+            resource_type=resource_type,
+        )
 
     @staticmethod
     def _read_sql(path: Path) -> str:
