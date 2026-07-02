@@ -2,10 +2,11 @@
 {% set change = change | default({}) %}
 
 {# Use .get() to safely check for keys that might not exist #}
-{% set transient = add.get('transient') or change.get('transient') %}
-{% set managed_access = add.get('managed_access') or change.get('managed_access') %}
-{% set data_retention = add.get('data_retention_time_in_days') or change.get('data_retention_time_in_days') %}
-{% set comment = add.get('comment') or change.get('comment') %}
+
+{% set transient = 'transient' | pick(add, change) %}
+{% set managed_access = 'managed_access' | pick(add, change) %}
+{% set data_retention = 'data_retention' | pick(add, change) %}
+{% set comment = 'comment' | pick(add, change) %}
 
 {% if ddl_command.upper() == 'CREATE OR ALTER' %}
 CREATE OR ALTER {% if transient %} TRANSIENT {% endif %} SCHEMA {{ name }}

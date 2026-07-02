@@ -1,3 +1,7 @@
+{% set add = add | default({}) %}
+{% set change = change | default({}) %}
+{% set change = remove | default({}) %}
+
 {# 1. Setup variables using our new 'pick' filter #}
 {% set comment = 'comment' | pick(add, change) %}
 {% set add_cols = add.get('columns', []) %}
