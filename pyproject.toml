@@ -1,13 +1,30 @@
 [project]
 name = "sqliac"
-version = "0.0.1"
+version = "0.1.0"
+description = "An alternative to Terraform for SQL databases without using a state."
+readme = "README.md"
 requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Ruslan Gonzalez Konstantinov", email = "rus.kgo.gmail@example.com" },
+]
+keywords = ["sql", "iac", "terraform-alternative", "database"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Intended Audience :: Developers",
+    "Topic :: Database",
+]
 dependencies = [
     "Jinja2",
     "rich",
     "sqlparse",
     "dictdiffer",
 ]
+[project.urls]
+Homepage = "https://codeberg.org/ruskgo/sqliac"
+"Bug Tracker" = "https://codeberg.org/ruskgo/sqliac/issues"
 
 [project.optional-dependencies]
 snowflake = ["snowflake-connector-python[secure-local-storage]", "cryptography"]
