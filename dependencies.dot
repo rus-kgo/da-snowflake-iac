@@ -3,7 +3,11 @@ digraph G {
   node [shape=ellipse, style=filled, fillcolor=lightgrey, fontname=Helvetica];
 "database::MODELING";
 "database::PRESENTATION" -> "database::MODELING";
-"table::FIRST_TABLE" -> "database::MODELING";
-"table::SECOND_TABLE" -> "database::MODELING";
-"table::SECOND_TABLE" -> "database::PRESENTATION";
+"schema::MODELING.MODELING_SCHEMA" -> "database::MODELING";
+"schema::PRESENTATION.EXAMPLE_SCHEMA" -> "database::PRESENTATION";
+"table::MODELING.MODELING_SCHEMA.FIRST_TABLE" -> "database::MODELING";
+"table::MODELING.MODELING_SCHEMA.FIRST_TABLE" -> "schema::MODELING.MODELING_SCHEMA";
+"table::PRESENTATION.EXAMPLE_SCHEMA.SECOND_TABLE" -> "database::MODELING";
+"table::PRESENTATION.EXAMPLE_SCHEMA.SECOND_TABLE" -> "database::PRESENTATION";
+"table::PRESENTATION.EXAMPLE_SCHEMA.SECOND_TABLE" -> "schema::PRESENTATION.EXAMPLE_SCHEMA";
 }

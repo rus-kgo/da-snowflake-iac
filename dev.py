@@ -1,176 +1,154 @@
-import threading
-import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from collections import defaultdict
-from contextlib import contextmanager
+from typing import Any
+
+from dictdiffer import diff
+from icecream import ic
+
+from sqliac.constants import DDLCommand
+from sqliac.drift import DriftDDLContext
+
+definition = {
+    "name": "MODELING.MODELING_SCHEMA.FIRST_TABLE",
+    "columns": [
+        {
+            "name": "COLUMN1",
+            "type": "VARCHAR",
+            "nullable": True,
+            "comment": "COLUMN 1 DESCRIPTION",
+        },
+        {
+            "name": "COLUMN2",
+            "type": "NUMBER",
+            "nullable": False,
+            "default": 0,
+            "comment": "COLUMN 2 DESCRIPTION",
+        },
+        {
+            "name": "COLUMN3",
+            "type": "TEXT",
+            "nullable": True,
+            "default": 0,
+            "comment": "COLUMN 3 DESCRIPTION",
+        },
+    ],
+}
+
+state = {
+    "columns": [
+        {"comment": None, "name": "COLUMN1", "nullable": True, "type": "TEXT"},
+        {
+            "comment": None,
+            "name": "COLUMN2",
+            "nullable": False,
+            "default": 0,
+            "type": "NUMBER",
+        },
+        {
+            "comment": None,
+            "name": "COLUMN3",
+            "nullable": True,
+            "default": 0,
+            "type": "TEXT",
+        },
+    ],
+    "comment": None,
+}
+
+ignore_paths = set(definition.keys()) ^ set(state.keys())
+ignore_paths.add("name")
+
+differnce = diff(first=state, second=definition)
+ic(differnce)
+
+values_check_result = [
+    ("change", ["columns", 0, "comment"], (None, "COLUMN 1 DESCRIPTION")),
+    ("change", ["columns", 0, "type"], ("TEXT", "VARCHAR")),
+    ("change", ["columns", 1, "comment"], (None, "COLUMN 2 DESCRIPTION")),
+    ("add", ["columns", 1], [("default", 0)]),
+    ("change", ["columns", 2, "comment"], (None, "COLUMN 3 DESCRIPTION")),
+    ("add", ["columns", 2], [("default", 0)]),
+]
+
+drift_ddl_context = DriftDDLContext(
+    ddl_command=DDLCommand.ALTER,
+    name=definition.get("name", ""),
+)
+
+# If the state is empty, it's a CREATE operation
+if any(action == "add" and path == "" for action, path, _ in values_check_result):
+    ic(
+        DriftDDLContext(
+            add=definition,
+            ddl_command=DDLCommand.CREATE,
+            name=definition.get("name", ""),
+        )
+    )
+
+drift_ddl_context = DriftDDLContext(
+    ddl_command=DDLCommand.ALTER, name=definition.get("name", "")
+)
+
+for action, path, details in values_check_result:
+    # Determine if this is a nested modification
+    # If path is like ['any_list', 0, 'any_key'], it's a change to an existing item
+    is_nested_item = (
+        isinstance(path, list) and len(path) >= 2 and isinstance(path[1], int)
+    )
+
+    # DYNAMIC RE-MAPPING:
+    # If we are adding a property to an existing list item, treat it as a 'change'
+    current_action = "change" if (action == "add" and is_nested_item) else action
+
+    if isinstance(path, list):
+        root_key = path[0]
+        if is_nested_item:
+            idx = path[1]
+            # Grab the whole item definition (e.g., the whole Column dict)
+            # so the template has all the context it needs to render the ALTER
+            value = definition[root_key][idx]
+            drift_ddl_context.add_frozen(current_action, root_key, value)
+        else:
+            # Attribute change at the top level of the resource
+            # e.g., ('change', 'comment', (old, new))
+            drift_ddl_context[current_action][root_key] = details[1]
+
+    elif isinstance(path, str):
+        # Case: Top level attribute or whole item added/removed
+        if action == "change":
+            drift_ddl_context[action][path] = details[1]
+        elif action in {"add", "remove"}:
+            # details is a list of (index, value) for brand new items
+            added_items = {value for _, value in details}
+            drift_ddl_context.union_frozen(action, path, added_items)
+
+ic(drift_ddl_context)
 
 
-# ---------------------------
-# Connection State
-# ---------------------------
+def _filter_state_by_definition(state: Any, definition: Any) -> Any:
+    """Recursively filter state to only include keys present in definition."""
+    if isinstance(definition, dict) and isinstance(state, dict):
+        return {
+            k: _filter_state_by_definition(state[k], v)
+            for k, v in definition.items()
+            if k in state
+        }
+    elif isinstance(definition, list) and isinstance(state, list):
+        # For lists, we align by index
+        return [
+            _filter_state_by_definition(state[i], definition[i])
+            for i in range(min(len(state), len(definition)))
+        ]
+    return state
 
-
-class ConnectionState:
-    def __init__(self, name):
-        self.name = name
-        self.state = "init"
-        self.handle = str | None
-
-
-# ---------------------------
-# Base Connection Manager
-# ---------------------------
-
-
-class BaseConnectionManager:
-    def __init__(self):
-        self.thread_connections = {}
-        self.lock = threading.RLock()
-
-    def get_thread_id(self):
-        return threading.current_thread().name
-
-    def get_thread_connection(self):
-        thread_id = self.get_thread_id()
-
-        with self.lock:
-            if thread_id not in self.thread_connections:
-                print(f"[{thread_id}] creating ConnectionState")
-                self.thread_connections[thread_id] = ConnectionState(thread_id)
-
-            return self.thread_connections[thread_id]
-
-    def open(self, connection: ConnectionState):
-        print(f"[{connection.name}] OPEN connection")
-        connection.state = "open"
-        connection.handle = f"conn-{connection.name}"
-        return connection
-
-    def close(self, connection: ConnectionState):
-        print(f"[{connection.name}] CLOSE connection")
-        connection.state = "closed"
-        connection.handle = None
-
-    @contextmanager
-    def get_connection(self):
-        conn = self.get_thread_connection()
-
-        if conn.state != "open":
-            conn = self.open(conn)
-
-        try:
-            yield conn.handle
-        except Exception:
-            conn.state = "fail"
-            raise
-
-    def cleanup_all(self):
-        with self.lock:
-            for conn in self.thread_connections.values():
-                if conn.state == "open":
-                    self.close(conn)
-            self.thread_connections.clear()
-
-
-# ---------------------------
-# Adapter
-# ---------------------------
-
-
-class MockAdapter:
-    def __init__(self):
-        self.connections = BaseConnectionManager()
-
-    def execute(self, task_name: str):
-        with self.connections.get_connection() as conn:
-            thread = threading.current_thread().name
-            print(f"[{thread}] USING {conn} START → {task_name}")
-            time.sleep(1)  # simulate blocking I/O (SQL)
-            print(f"[{thread}] USING {conn} END  → {task_name}")
-
-    def cleanup(self):
-        self.connections.cleanup_all()
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc, tb):
-        self.cleanup()
-
-
-# ---------------------------
-# dbt-style Scheduler
-# ---------------------------
-
-
-class Scheduler:
-    def __init__(self, adapter, dependencies, max_threads=3):
-        self.adapter = adapter
-        self.dependencies = {k: set(v) for k, v in dependencies.items()}
-        self.reverse_deps = defaultdict(set)
-        self.max_threads = max_threads
-
-        for node, deps in self.dependencies.items():
-            for d in deps:
-                self.reverse_deps[d].add(node)
-
-    def run_task(self, task_name: str):
-        self.adapter.execute(task_name)
-
-    def run(self):
-        completed = set()
-        ready = {n for n, d in self.dependencies.items() if not d}
-        futures = {}
-
-        with ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-            while ready or futures:
-                # submit all ready tasks
-                while ready:
-                    task = ready.pop()
-                    future = executor.submit(self.run_task, task)
-                    futures[future] = task
-
-                # wait for one task to finish
-                for future in as_completed(futures):
-                    task = futures.pop(future)
-                    future.result()  # propagate errors
-                    completed.add(task)
-
-                    # unlock downstream tasks
-                    for child in self.reverse_deps[task]:
-                        self.dependencies[child].remove(task)
-                        if not self.dependencies[child]:
-                            ready.add(child)
-
-                    break  # important: return to scheduling loop
-
-
-# ---------------------------
-# Main
-# ---------------------------
 
 if __name__ == "__main__":
-    # Dependency graph
+    ic(_filter_state_by_definition(state, definition))
     #
-    # A     B
-    #  \   /
-    #    C
-    #    |
-    #    D
-    #
-    dependencies = {
-        "A": set(),
-        "B": set(),
-        "C": {"A", "B"},
-    }
+    # dict1 = {"item": "apple", "price": 1.20}
+    # dict2 = {"item": "banana", "price": 0.50}
+    # dict3 = {"item": "apple", "price": 1.20}  # Duplicate of dict1
 
-    dependencies = {
-        "database::my_db": {"role::admin_role", "role::user_role"},
-        "schma::my_schema": set(),
-        # "role::admin_role": {"database::my_db"},
-    }
+    # # Convert key-value items into frozenset to make them hashable
+    # set_of_dicts = {frozenset(d.items()) for d in [dict1, dict2, dict3]}
 
-    adapter = MockAdapter()
-    with adapter:
-        scheduler = Scheduler(adapter, dependencies, max_threads=4)
-        scheduler.run()
+    # # Output will automatically deduplicate and contain only 2 unique items
+    # print(set_of_dicts)
