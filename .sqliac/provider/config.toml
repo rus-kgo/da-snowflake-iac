@@ -1,3 +1,4 @@
+############################# Database #############################
 [snowflake.database.ddl_command]
 create = "CREATE OR ALTER"
 alter  = "CREATE OR ALTER"
@@ -15,6 +16,8 @@ wait_time = 0
 [snowflake.database.ddl_context.depends_on]
 
 
+############################# Schema #############################
+
 [snowflake.schema.ddl_command]
 create = "CREATE OR ALTER"
 alter  = "CREATE OR ALTER"
@@ -30,6 +33,8 @@ wait_time = 0
 
 [snowflake.schema.ddl_context.depends_on]
 
+
+############################# Table #############################
 
 [snowflake.table.ddl_command]
 create = "CREATE"
@@ -56,3 +61,256 @@ comment = "Name field"
 database = [
   "example_database"
 ]
+
+############################# Alert #############################
+
+[snowflake.alert.ddl_command]
+create = "CREATE OR ALTER"
+alter  = "CREATE OR ALTER"
+drop   = "DROP"
+
+[snowflake.alert.ddl_context]
+name = "MODELING.MODELING_SCHEMA.EXAMPLE_ALERT"
+warehouse = "COMPUTE_WH"
+schedule = "5 MINUTE"
+condition = "SELECT 1 FROM MODELING.MODELING_SCHEMA.FIRST_TABLE WHERE 1=0"
+action = "INSERT INTO MODELING.MODELING_SCHEMA.FIRST_TABLE VALUES (1, 'alert_fired')"
+comment = "Example alert"
+wait_time = 0
+
+[snowflake.alert.ddl_context.depends_on]
+
+
+############################# Dynamic Table #############################
+
+[snowflake.dynamic_table.ddl_command]
+create = "CREATE"
+alter  = "ALTER"
+drop   = "DROP"
+
+[snowflake.dynamic_table.ddl_context]
+name = "MODELING.MODELING_SCHEMA.EXAMPLE_DT"
+target_lag = "1 hour"
+warehouse = "COMPUTE_WH"
+query = "SELECT * FROM MODELING.MODELING_SCHEMA.FIRST_TABLE"
+comment = "Example dynamic table"
+wait_time = 0
+
+[snowflake.dynamic_table.ddl_context.depends_on]
+
+
+[snowflake.event_table.ddl_command]
+create = "CREATE OR ALTER"
+alter  = "CREATE OR ALTER"
+drop   = "DROP"
+
+[snowflake.event_table.ddl_context]
+name = "MODELING.MODELING_SCHEMA.EXAMPLE_EVENTS"
+data_retention_time_in_days = 1
+change_tracking = "ON"
+comment = "Example event table"
+wait_time = 0
+
+[snowflake.event_table.ddl_context.depends_on]
+
+
+[snowflake.grant.ddl_command]
+create = "GRANT"
+alter  = "GRANT"
+drop   = "REVOKE"
+
+[snowflake.grant.ddl_context]
+privilege = "SELECT"
+on_type = "TABLE"
+on_name = "MODELING.MODELING_SCHEMA.FIRST_TABLE"
+to_role = "PUBLIC"
+with_grant_option = false
+wait_time = 0
+
+[snowflake.grant.ddl_context.depends_on]
+
+
+[snowflake.notification_integration.ddl_command]
+create = "CREATE OR ALTER"
+alter  = "CREATE OR ALTER"
+drop   = "DROP"
+
+[snowflake.notification_integration.ddl_context]
+name = "EXAMPLE_NOTIFICATION_INT"
+enabled = true
+notification_provider = "AWS_SQS"
+direction = "OUTBOUND"
+aws_sqs_arn = "arn:aws:sqs:us-east-1:123456789:example-queue"
+aws_sqs_role_arn = "arn:aws:iam::123456789:role/example-role"
+comment = "Example notification integration"
+wait_time = 0
+
+[snowflake.notification_integration.ddl_context.depends_on]
+
+
+[snowflake.role.ddl_command]
+create = "CREATE OR ALTER"
+alter  = "CREATE OR ALTER"
+drop   = "DROP"
+
+[snowflake.role.ddl_context]
+name = "EXAMPLE_ROLE"
+comment = "Example role"
+wait_time = 0
+
+[snowflake.role.ddl_context.depends_on]
+
+
+[snowflake.security_integration.ddl_command]
+create = "CREATE OR ALTER"
+alter  = "CREATE OR ALTER"
+drop   = "DROP"
+
+[snowflake.security_integration.ddl_context]
+name = "EXAMPLE_SECURITY_INT"
+type = "OAUTH"
+oauth_client = "CUSTOM"
+enabled = true
+comment = "Example security integration"
+wait_time = 0
+
+[snowflake.security_integration.ddl_context.depends_on]
+
+
+[snowflake.stage.ddl_command]
+create = "CREATE OR ALTER"
+alter  = "CREATE OR ALTER"
+drop   = "DROP"
+
+[snowflake.stage.ddl_context]
+name = "MODELING.MODELING_SCHEMA.EXAMPLE_STAGE"
+url = "s3://example-bucket/path/"
+storage_integration = "EXAMPLE_STORAGE_INT"
+encryption_type = "AWS_SSE_S3"
+directory_enabled = true
+comment = "Example external stage"
+wait_time = 0
+
+[snowflake.stage.ddl_context.depends_on]
+
+
+[snowflake.storage_integration.ddl_command]
+create = "CREATE OR ALTER"
+alter  = "CREATE OR ALTER"
+drop   = "DROP"
+
+[snowflake.storage_integration.ddl_context]
+name = "EXAMPLE_STORAGE_INT"
+storage_provider = "S3"
+enabled = true
+storage_allowed_locations = "'s3://example-bucket/'"
+storage_aws_role_arn = "arn:aws:iam::123456789:role/example-role"
+comment = "Example storage integration"
+wait_time = 0
+
+[snowflake.storage_integration.ddl_context.depends_on]
+
+
+[snowflake.stream.ddl_command]
+create = "CREATE OR ALTER"
+alter  = "CREATE OR ALTER"
+drop   = "DROP"
+
+[snowflake.stream.ddl_context]
+name = "MODELING.MODELING_SCHEMA.EXAMPLE_STREAM"
+source_type = "TABLE"
+source_name = "MODELING.MODELING_SCHEMA.FIRST_TABLE"
+append_only = true
+show_initial_rows = false
+comment = "Example stream"
+wait_time = 0
+
+[snowflake.stream.ddl_context.depends_on]
+
+
+[snowflake.view.ddl_command]
+create = "CREATE OR ALTER"
+alter  = "CREATE OR ALTER"
+drop   = "DROP"
+
+[snowflake.view.ddl_context]
+name = "MODELING.MODELING_SCHEMA.EXAMPLE_VIEW"
+secure = false
+query = "SELECT * FROM MODELING.MODELING_SCHEMA.FIRST_TABLE"
+comment = "Example view"
+wait_time = 0
+
+[snowflake.view.ddl_context.depends_on]
+
+
+[snowflake.task.ddl_command]
+create = "CREATE OR ALTER"
+alter  = "CREATE OR ALTER"
+drop   = "DROP"
+
+[snowflake.task.ddl_context]
+name = "MODELING.MODELING_SCHEMA.EXAMPLE_TASK"
+warehouse = "COMPUTE_WH"
+schedule = "60 MINUTE"
+sql_statement = "SELECT 1"
+comment = "Example task"
+wait_time = 0
+
+[snowflake.task.ddl_context.depends_on]
+
+
+[snowflake.user.ddl_command]
+create = "CREATE OR ALTER"
+alter  = "CREATE OR ALTER"
+drop   = "DROP"
+
+[snowflake.user.ddl_context]
+name = "EXAMPLE_USER"
+login_name = "example_user"
+display_name = "Example User"
+email = "user@example.com"
+default_role = "PUBLIC"
+default_warehouse = "COMPUTE_WH"
+disabled = false
+comment = "Example user"
+wait_time = 0
+
+[snowflake.user.ddl_context.depends_on]
+
+
+[snowflake.warehouse.ddl_command]
+create = "CREATE OR ALTER"
+alter  = "CREATE OR ALTER"
+drop   = "DROP"
+
+[snowflake.warehouse.ddl_context]
+name = "EXAMPLE_WH"
+warehouse_size = "X-SMALL"
+auto_suspend = 300
+auto_resume = true
+min_cluster_count = 1
+max_cluster_count = 1
+scaling_policy = "STANDARD"
+comment = "Example warehouse"
+wait_time = 0
+
+[snowflake.warehouse.ddl_context.depends_on]
+
+
+[snowflake.dynamic_iceberg_table.ddl_command]
+create = "CREATE"
+alter  = "ALTER"
+drop   = "DROP"
+
+[snowflake.dynamic_iceberg_table.ddl_context]
+name = "MODELING.MODELING_SCHEMA.EXAMPLE_DIT"
+target_lag = "1 hour"
+warehouse = "COMPUTE_WH"
+external_volume = "example_volume"
+catalog = "SNOWFLAKE"
+base_location = "example/path/"
+query = "SELECT * FROM MODELING.MODELING_SCHEMA.FIRST_TABLE"
+comment = "Example dynamic iceberg table"
+wait_time = 0
+
+[snowflake.dynamic_iceberg_table.ddl_context.depends_on]
