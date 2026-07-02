@@ -21,6 +21,7 @@ from sqliac.execution_plan import ExecutionPlan
 from sqliac.main import run
 from sqliac.providers_loader import ProviderConfig, ProviderLoader, ResourceConfig
 from sqliac.template_engine import TemplateEngine
+from sqliac.utils import box_message
 
 
 def _validate_inputs(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
@@ -101,7 +102,7 @@ def _cmd_compile(args: argparse.Namespace) -> None:
             template_type=args.template,
             context=ddl_context,
         )
-        print(template_engine.pretty_sql(sql))
+        print(box_message(title="DDL SQL", message=template_engine.pretty_sql(sql)))
 
     elif args.template == TemplateType.STATE and not args.operation:
         sql = template_engine.render(
@@ -110,7 +111,7 @@ def _cmd_compile(args: argparse.Namespace) -> None:
             template_type=args.template,
             context=resource_config.ddl_context,
         )
-        print(template_engine.pretty_sql(sql))
+        print(box_message(title="State SQL", message=template_engine.pretty_sql(sql)))
 
 
 def _cmd_list() -> None:
