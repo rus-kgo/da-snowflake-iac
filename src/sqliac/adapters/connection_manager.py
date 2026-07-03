@@ -122,6 +122,7 @@ class ThreadConnectionManager(abc.ABC):
 
         # Open connection if not already open
         if conn_state.state != "open":
+            self.close(conn_state)
             # Ensure the concrete open method is called
             conn_state = self.open(conn_state)
 
