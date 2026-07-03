@@ -72,7 +72,9 @@ class ExecutionPlan:
         # Collect all resource IDs that exist
         existing_resources = set(dependency_graph.keys())
 
-        referenced_resources = set().union(*dependency_graph.values())
+        referenced_resources = (
+            set().union(*dependency_graph.values()) if dependency_graph else set()
+        )
 
         # Find missing resources
         missing = referenced_resources - existing_resources
@@ -89,7 +91,7 @@ class ExecutionPlan:
                 error="invalid dependency reference",
                 file=str(Paths.DEFINITIONS_DIR),
                 details=f"invalid or missing references:  {''.join(blocks)}",
-                note="resource names are case sesitive",
+                note="resource names are case sensitive",
             )
 
     def _build_reverse_graph(
@@ -152,7 +154,7 @@ class ExecutionPlan:
                 dep_str = "\n".join(dep_lines)
 
                 block = f"""
-    --> {rsc}.yml
+    --> {rsc}.toml
     |
     1 | [[{rsc}]]
     2 | name = "{name}"
