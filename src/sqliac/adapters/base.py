@@ -130,8 +130,8 @@ class BaseAdapter(abc.ABC):
                 try:
                     if cursor:
                         cursor.execute(statement)
-                except RustyError as err:
-                    print(err)
+                except RustyError:
+                    raise
                 except Exception as err:
                     raise RustyError(
                         error="SQL statement execution error",

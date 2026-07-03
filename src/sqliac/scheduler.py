@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from sqliac.providers_loader import ResourceConfig
 
 TASK_SEPARATOR = "::"
-MAX_THREADS = 3
 
 
 class Scheduler:
@@ -30,6 +29,7 @@ class Scheduler:
         run_mode: str,
         iac_action: str,
         connection: BaseAdapter,
+        threads: int,
     ):
         """Initialize the scheduler."""
         self.conn = connection
@@ -41,7 +41,9 @@ class Scheduler:
         self.drift = Drift(connection=connection)
         self.template_engine = TemplateEngine()
 
-        self.succeded_tasks: set[str] = set()
+        self.succeeded_tasks: set[str] = set()
+
+        self.threads = threads
 
     def execute_rendered_sql_template(
         self,
@@ -136,6 +138,7 @@ class Scheduler:
                     wait_time=ddl_context.get("wait_time", None),
                     drift_ddl_context=drift_ddl_context,
                 )
+                self.succeeded_tasks.add(task)
                 continue
 
             # Step 4: Handle create-or-update
@@ -165,15 +168,15 @@ class Scheduler:
                         wait_time=ddl_context.get("wait_time", None),
                         drift_ddl_context=drift_ddl_context,
                     )
-                except RustyError as err:
-                    print(err)
                 except Exception as err:
+                    if isinstance(err, RustyError):
+                        raise
                     raise RustyError(
                         error=f"failed to execute SQL query, task: {task}",
                         details=str(err),
                     ) from err
                 else:
-                    self.succeded_tasks.add(task)
+                    self.succeeded_tasks.add(task)
 
             # Step 5: Handle destroy
             if self.iac_action == IacAction.DESTROY:
@@ -204,16 +207,19 @@ class Scheduler:
                         drift_ddl_context=drift_ddl_context,
                     )
                 except Exception as err:
+                    if isinstance(err, RustyError):
+                        raise
                     raise RustyError(
                         error="failed to execute SQL query.",
-                        details=f"faild task: {task}",
+                        details=f"failed task: {task}",
                     ) from err
                 else:
-                    self.succeded_tasks.add(task)
+                    self.succeeded_tasks.add(task)
 
     def run(self, execution_plan: ExecutionPlanResult) -> None:
         """Execute all scheduled tasks and collect errors."""
         completed = set()
+        failed_tasks = {}
 
         if self.iac_action == IacAction.DESTROY:
             # For DESTROY, reverse the dependency logic
@@ -232,11 +238,12 @@ class Scheduler:
                 k: v.copy() for k, v in execution_plan.reverse_dependency_graph.items()
             }
 
+        all_tasks = set(current_deps.keys())
         ready = {n for n, d in current_deps.items() if not d}
         futures = {}
 
         with ThreadPoolExecutor(
-            max_workers=MAX_THREADS, thread_name_prefix=self.conn.dialect
+            max_workers=self.threads, thread_name_prefix=self.conn.dialect
         ) as executor:
             while ready or futures:
                 # submit all ready tasks
@@ -248,11 +255,49 @@ class Scheduler:
                 # wait for one task to finish
                 for future in as_completed(futures):
                     task = futures.pop(future)
-                    future.result()
-                    completed.add(task)
+                    try:
+                        future.result()
+                        completed.add(task)
 
-                    # unlock downstream tasks
-                    for child in current_rev_deps[task]:
-                        current_deps[child].remove(task)
-                        if not current_deps[child]:
-                            ready.add(child)
+                        # unlock downstream tasks only on success
+                        for child in current_rev_deps[task]:
+                            current_deps[child].remove(task)
+                            if not current_deps[child]:
+                                ready.add(child)
+                    except Exception as err:
+                        failed_tasks[task] = err
+                        completed.add(task)
+
+        if failed_tasks:
+            skipped_tasks = all_tasks - completed - set(failed_tasks.keys())
+
+            error_details = []
+            for t, err in failed_tasks.items():
+                # Extract error message cleanly
+                if isinstance(err, RustyError) and err.sql and err.details:
+                    error_details.append(
+                        f"  - {t}\n{box_message(message=f'{err.sql}\n\n{box_message(err.details, width=65)}', title='SQL')}"
+                    )
+                else:
+                    error_details.append(f"  - {t}:\n{err}")
+
+            skipped_details = []
+            if skipped_tasks:
+                for t in sorted(skipped_tasks):
+                    skipped_details.append(f"  - {t}")
+
+            details_str = (
+                "the following tasks encountered execution errors:\n\n"
+                + "\n".join(error_details)
+            )
+            if skipped_details:
+                details_str += (
+                    "\n\nskipped downstream tasks (due to dependency failures):\n"
+                    + "\n".join(skipped_details)
+                )
+
+            raise RustyError(
+                error="scheduled execution failed",
+                details=details_str,
+                help="verify the errors above and fix the issue before retrying.",
+            )
