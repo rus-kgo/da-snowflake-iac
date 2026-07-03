@@ -7,6 +7,7 @@ import tomllib
 from dataclasses import InitVar, asdict, dataclass, field
 from importlib.resources import files
 from pathlib import Path
+from tomllib import TOMLDecodeError
 from typing import TYPE_CHECKING, Any
 
 from sqliac.adapters import AdapterFactory
@@ -36,7 +37,7 @@ class ResourceConfig:
     config_file_path: InitVar[str] = ""
     resource_type: InitVar[str] = ""
 
-    def __post_init__(self, config_file_path: str, resource_name: str):
+    def __post_init__(self, config_file_path: str, resource_type: str):
         """Standard library validation hook."""
         if not isinstance(self.ddl_command, dict):
             raise RustyError(error="`ddl_command` must be a dictionary")
@@ -45,14 +46,14 @@ class ResourceConfig:
 
         if "name" not in self.ddl_context:
             raise RustyError(
-                error=f"`{resource_name}` is missing `name` field.",
+                error=f"`{resource_type}` is missing `name` field.",
                 file=config_file_path,
             )
         if "depends_on" not in self.ddl_context:
             raise RustyError(
-                error=f"`{resource_name}` is missing `depends_on` field.",
+                error=f"`{resource_type}` is missing `depends_on` field.",
                 file=config_file_path,
-                help=f"add `[{resource_name}.ddl_context.depends_on]` to config (can be empty)",
+                help=f"add `[{resource_type}.ddl_context.depends_on]` to config (can be empty)",
             )
 
         valid_enum_values = set(DDLCommand.executable())
@@ -126,45 +127,60 @@ class ProviderLoader:
             raise RustyError(
                 error="missing `config.toml`",
                 file=str(target_dir),
-                help="run `sqliac init` to create scafolding with required files",
+                help="run `sqliac init` to create scaffolding with required files",
             )
 
-        with open(target_dir, "rb") as f:
-            config_data = tomllib.load(f)
-
-        provider_name = next(iter(config_data))
-        available_adapters = AdapterFactory().list_adapters()
-        if provider_name not in available_adapters:
+        try:
+            with open(target_dir, "rb") as f:
+                config_data = tomllib.load(f)
+        except TOMLDecodeError as err:
             raise RustyError(
-                error=f"`{provider_name}` adapter not available",
-                details=f"""available adapters:
- -  {"\n -  ".join(available_adapters)}
-""",
-            )
-
-        resources_raw = config_data.get(provider_name)
-        if not resources_raw:
-            raise RustyError(
-                error=f"`{provider_name}` config contains no resources",
+                error="invalid TOML file",
                 file=str(target_dir),
-                help="""`config.toml` example below
-```toml
-[snowflake.table.ddl_command]
-create = "CREATE OR ALTER"
-alter  = "CREATE OR ALTER"
-drop   = "DROP"
+                help="check TOML formatting in the definition file",
+            ) from err
 
-[snowflake.table.ddl_context]
-name = "example_table"
+        except PermissionError:
+            raise RustyError(
+                error="read permission denied",
+                file=str(target_dir),
+                help="the file might be open by another application or missing read permissions",
+            ) from None
 
-[snowflake.table.ddl_context.depends_on]
-database = ["expl_db_one"]
-schema = ["exmpl_sch_one"]
-```
-""",
-            )
+        else:
+            provider_name = next(iter(config_data))
+            available_adapters = AdapterFactory().list_adapters()
+            if provider_name not in available_adapters:
+                raise RustyError(
+                    error=f"`{provider_name}` adapter not available",
+                    details=f"""available adapters:
+    -  {"\n -  ".join(available_adapters)}
+    """,
+                )
 
-        return provider_name, resources_raw
+            resources_raw = config_data.get(provider_name)
+            if not resources_raw:
+                raise RustyError(
+                    error=f"`{provider_name}` config contains no resources",
+                    file=str(target_dir),
+                    help="""`config.toml` example below
+    ```toml
+    [snowflake.table.ddl_command]
+    create = "CREATE OR ALTER"
+    alter  = "CREATE OR ALTER"
+    drop   = "DROP"
+
+    [snowflake.table.ddl_context]
+    name = "example_table"
+
+    [snowflake.table.ddl_context.depends_on]
+    database = ["expl_db_one"]
+    schema = ["exmpl_sch_one"]
+    ```
+    """,
+                )
+
+            return provider_name, resources_raw
 
     @classmethod
     def _parse_single_resource(
