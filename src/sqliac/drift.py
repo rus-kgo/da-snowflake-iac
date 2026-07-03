@@ -44,9 +44,12 @@ class DriftDDLContext:
 
     ddl_command: DDLCommand
     name: str
-    add: dict[str, set[frozenset]] = field(default_factory=dict)
-    change: dict[str, set[frozenset]] = field(default_factory=dict)
-    remove: dict[str, set[frozenset]] = field(default_factory=dict)
+    add: dict[str, Any] = field(default_factory=dict)
+    change: dict[str, Any] = field(default_factory=dict)
+    remove: dict[str, Any] = field(default_factory=dict)
+    _seen_items: dict[tuple[str, str], set[str]] = field(
+        default_factory=dict, init=False, repr=False
+    )
 
     def __setitem__(self, key: str, value: Any) -> None:  # noqa: D105
         if key not in {"add", "change", "remove"}:
@@ -56,7 +59,7 @@ class DriftDDLContext:
 
         setattr(self, key, value)
 
-    def __getitem__(self, key: str) -> Any:  # noqa: D105
+    def __getitem__(self, key: str) -> Any:
         if key not in {"add", "change", "remove"}:
             raise RustyError(
                 error=f'invalid key "{key}", expected one of: add, change, remove'
@@ -64,43 +67,33 @@ class DriftDDLContext:
 
         return getattr(self, key)
 
-    def add_frozen(self, action: str, key: str, value: dict) -> None:
-        section = getattr(self, action)
-        section.setdefault(key, set()).add(frozenset(value.items()))
+    @staticmethod
+    def _dedupe_key(value: dict) -> str:
+        return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
-    def union_frozen(
-        self,
-        action: str,
-        key: str,
-        values: set,
-    ) -> None:
-        section = self[action]
-        section.setdefault(key, set()).update(values)
+    def add_item(self, action: str, key: str, value: dict) -> None:
+        dedupe_key = self._dedupe_key(value)
+        seen = self._seen_items.setdefault((action, key), set())
+        if dedupe_key in seen:
+            return
 
-    def _unfreeze_item_or_set(self, item: Any) -> Any:
-        """Helper to convert a set of frozensets to a list of dicts, or return item as is."""
-        if isinstance(item, set):
-            return [dict(frozen_item) for frozen_item in item]
-        return item
+        seen.add(dedupe_key)
+        self[action].setdefault(key, []).append(value)
 
-    def _unfreeze_section(
-        self, section: dict[str, set[frozenset]]
-    ) -> dict[str, list[dict]]:
-        """Converts internal frozen structural sets back to normal list of dicts."""
-        return {
-            key: self._unfreeze_item_or_set(value) for key, value in section.items()
-        }
+    def add_items(self, action: str, key: str, values: list[dict]) -> None:
+        for value in values:
+            self.add_item(action, key, value)
 
     def to_dict(self) -> dict[str, Any]:
-        """Return data class as a dictionary with frozen sets unfrozen."""
+        """Return data class as a dictionary."""
         return {
             "ddl_command": self.ddl_command.value
             if hasattr(self.ddl_command, "value")
             else self.ddl_command,
             "name": self.name,
-            "add": self._unfreeze_section(self.add),
-            "change": self._unfreeze_section(self.change),
-            "remove": self._unfreeze_section(self.remove),
+            "add": self.add,
+            "change": self.change,
+            "remove": self.remove,
         }
 
 
@@ -299,7 +292,7 @@ class Drift:
                     # Grab the whole item definition (e.g., the whole Column dict)
                     # so the template has all the context it needs to render the ALTER
                     value = definition[root_key][idx]
-                    drift_ddl_context.add_frozen(current_action, root_key, value)
+                    drift_ddl_context.add_item(current_action, root_key, value)
                 else:
                     # Attribute change at the top level of the resource
                     # e.g., ('change', 'comment', (old, new))
@@ -311,8 +304,9 @@ class Drift:
                     drift_ddl_context[action][path] = details[1]
                 elif action in {"add", "remove"}:
                     # details is a list of (index, value) for brand new items
-                    added_items = {frozenset(value.items()) for _, value in details}
-                    drift_ddl_context.union_frozen(action, path, added_items)
+                    drift_ddl_context.add_items(
+                        action, path, [value for _, value in details]
+                    )
 
         return drift_ddl_context
 
