@@ -1,6 +1,6 @@
 {% set add = add | default({}) %}
 {% set change = change | default({}) %}
-{% set change = remove | default({}) %}
+{% set remove = remove | default({}) %}
 
 {# 1. Setup variables using our new 'pick' filter #}
 {% set comment = 'comment' | pick(add, change) %}
@@ -37,9 +37,9 @@ ALTER TABLE {{ name }} ALTER COLUMN {{ column.name }} SET DATA TYPE {{ column.ty
 {% endif %}
 
 {% if column.get('nullable') == 'YES' %}
-ALTER TABLE {{ name }} ALTER COLUMN {{ column.name }} SET NOT NULL;
-{% elif column.get('nullable') == 'NO' %}
 ALTER TABLE {{ name }} ALTER COLUMN {{ column.name }} DROP NOT NULL;
+{% elif column.get('nullable') == 'NO' %}
+ALTER TABLE {{ name }} ALTER COLUMN {{ column.name }} SET NOT NULL;
 {% endif %}
 
 {% if column.get('new_name') %}
