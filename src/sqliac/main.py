@@ -10,7 +10,7 @@ from sqliac.providers_loader import ProviderLoader
 from sqliac.scheduler import Scheduler
 
 
-def run(iac_action: IacAction, run_mode: RunMode) -> None:
+def run(iac_action: IacAction, run_mode: RunMode, threads: int) -> None:
     """Entry point of the pipeline."""
     provider_config = ProviderLoader.load()
     rsc_definitions = DefinitionsLoader.load(provider_config)
@@ -27,6 +27,7 @@ def run(iac_action: IacAction, run_mode: RunMode) -> None:
             run_mode=run_mode,
             provider_resources=provider_config.resources,
             definitions=rsc_definitions,
+            threads=threads,
         )
 
         scheduler.run(execution_plan=execution_plan)

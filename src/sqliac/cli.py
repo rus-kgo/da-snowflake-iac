@@ -122,7 +122,7 @@ def _cmd_list() -> None:
 
 
 def _cmd_init() -> None:
-    """Create tool scafolding."""
+    """Create tool scaffolding."""
     DefinitionsLoader.init_definitions()
     ProviderLoader.init_providers()
 
@@ -135,7 +135,7 @@ def _cmd_graph() -> None:
 
 
 def _cmd_run(args: argparse.Namespace) -> None:
-    run(iac_action=args.command, run_mode=args.run_mode)
+    run(iac_action=args.command, run_mode=args.run_mode, threads=int(args.threads))
 
 
 def _setup_logging(log: str, log_out: str):
@@ -179,11 +179,19 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command")
     subparsers.add_parser("list", help="print available adapters")
     subparsers.add_parser("graph", help="print resource dependency graph")
-    subparsers.add_parser("init", help="project scafolding")
+    subparsers.add_parser("init", help="project scaffolding")
 
     apply_parser = subparsers.add_parser(
         IacAction.APPLY, help="executes the definitions"
     )
+
+    apply_parser.add_argument(
+        "--threads",
+        nargs="?",
+        default=6,
+        help="nubmer of threads",
+    )
+
     apply_parser.add_argument(
         "--dry-run",
         dest="run_mode",
@@ -194,6 +202,13 @@ def main() -> None:
 
     destroy_parser = subparsers.add_parser(
         IacAction.DESTROY, help="destroy defined resources"
+    )
+
+    destroy_parser.add_argument(
+        "--threads",
+        nargs="?",
+        default=6,
+        help="nubmer of threads",
     )
     destroy_parser.add_argument(
         "--dry-run",
