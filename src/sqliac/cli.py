@@ -141,8 +141,9 @@ def _cmd_run(args: argparse.Namespace) -> None:
 def _setup_logging(log: str, log_out: str):
     """Configures global logging for the application."""
     handlers: list[logging.Handler] = [logging.StreamHandler()]
-    level = log.upper() if log else log_out.upper()
+    level = log.upper() if log else "CRITICAL"
     if log_out:
+        level = log_out.upper() if log_out else "CRITICAL"
         file_handler = logging.FileHandler("sqliac.log", mode="a", encoding="utf-8")
         handlers.append(file_handler)
 
@@ -164,14 +165,14 @@ def main() -> None:
     parser.add_argument(
         "--log",
         nargs="?",
-        default="CRITICAL",
+        default="",
         help="enable logging.",
         choices=["info", "debug"],
     )
     parser.add_argument(
         "--log-out",
         nargs="?",
-        default="CRITICAL",
+        default="",
         help="log output to file.",
         choices=["info", "debug"],
     )
