@@ -26,7 +26,9 @@ class ExecutionPlanResult:
 class ExecutionPlan:
     """Builds and validates execution plans for resources."""
 
-    def __init__(self, rsc_definitions: dict[str, list[dict[str, Any]]]) -> None:  # noqa: D107
+    def __init__(
+        self, rsc_definitions: dict[str, list[dict[str, Any]]]
+    ) -> None:  # noqa: D107
         self.rsc_definitions = rsc_definitions
 
     def build_execution_plan(self) -> ExecutionPlanResult:
@@ -91,7 +93,7 @@ class ExecutionPlan:
                 error="invalid dependency reference",
                 file=str(Paths.DEFINITIONS_DIR),
                 details=f"invalid or missing references:  {''.join(blocks)}",
-                note="resource names are case sensitive",
+                note="resource name is case sensitive and must be a 'FULLY.QUALIFIED.NAME'",
             )
 
     def _build_reverse_graph(
