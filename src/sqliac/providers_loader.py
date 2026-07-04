@@ -150,12 +150,11 @@ class ProviderLoader:
         else:
             provider_name = next(iter(config_data))
             available_adapters = AdapterFactory().list_adapters()
+            available_adapters_str = "\n -  ".join(available_adapters)
             if provider_name not in available_adapters:
                 raise RustyError(
                     error=f"`{provider_name}` adapter not available",
-                    details=f"""available adapters:
-    -  {"\n -  ".join(available_adapters)}
-    """,
+                    details=f"available adapters: {available_adapters_str if available_adapters else 'None'}",
                 )
 
             resources_raw = config_data.get(provider_name)
