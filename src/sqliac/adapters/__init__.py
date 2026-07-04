@@ -2,11 +2,6 @@
 
 __version__ = "0.1.0"
 
-from .adapter_snowflake import (
-    SnowflakeAdapter,
-    SnowflakeConnectionManager,
-    SnowflakeCredentials,
-)
 from .base import (
     BaseAdapter,
     BaseCredentials,
@@ -19,8 +14,4 @@ __all__ = [
     "BaseCredentials",
     # Factory
     "AdapterFactory",
-    # Snowflake
-    "SnowflakeAdapter",
-    "SnowflakeConnectionManager",
-    "SnowflakeCredentials",
 ]

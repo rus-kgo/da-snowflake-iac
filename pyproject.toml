@@ -27,10 +27,23 @@ Homepage = "https://codeberg.org/ruskgo/sqliac"
 "Bug Tracker" = "https://codeberg.org/ruskgo/sqliac/issues"
 
 [project.optional-dependencies]
-snowflake = ["snowflake-connector-python[secure-local-storage]", "cryptography"]
+dev = ["pytest>=9.1.1"]
+snowflake = ["sqliac-snowflake"]
+
+[tool.uv.workspace]
+  members = ["sqliac_adapters/sqliac_snowflake"]
+
+[project.entry-points."sqliac.adapters"]
+snowflake = "adapter:SnowflakeAdapter"
+
+[tool.uv.sources]
+sqliac-snowflake = { workspace = true }
 
 [project.scripts]
 sqliac = "sqliac.cli:main"
+
+[tool.setuptools.package-data]
+sqliac = ["templates/**/*.toml", "templates/**/*.sql"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
