@@ -5,7 +5,7 @@ description: >
 license: MIT
 ---
 
-## Purpose
+## SQLIaC — Jinja+SQL Templates Generation Skill
 
 Given a database engine (Snowflake, Oracle, PostgreSQL, etc.) and a resource type (table, view, role, etc.), produce:
 
