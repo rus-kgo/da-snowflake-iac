@@ -1,0 +1,19 @@
+# Copy this block into .sqliac/provider/config.toml, replace <engine> and
+# <resource_name>, and fill in real example values for ddl_context. This
+# entry serves both as documentation and as the fixture used by
+# `sqliac compile --ddl <op> <resource_name>` / `--state`.
+
+[<engine>.<resource_name>.ddl_command]
+create = "<CREATE_COMMAND>"   # e.g. "CREATE OR ALTER", "CREATE", "CREATE OR REPLACE"
+alter  = "<ALTER_COMMAND>"    # e.g. "CREATE OR ALTER", "ALTER", ""
+drop   = "DROP"
+
+[<engine>.<resource_name>.ddl_context]
+name = "FULLY.QUALIFIED.NAME"
+# <key1> = <example_value>
+# <key2> = <example_value>
+wait_time = 0
+
+[<engine>.<resource_name>.ddl_context.depends_on]
+# database = ["EXAMPLE_DB"]
+# schema = ["EXAMPLE_DB.EXAMPLE_SCHEMA"]
