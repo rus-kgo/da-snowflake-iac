@@ -12,7 +12,7 @@
 CREATE OR ALTER {% if transient %} TRANSIENT {% endif %} SCHEMA {{ name }}
   {% if managed_access %} WITH MANAGED ACCESS {% endif %}
   {% if data_retention is not none %} DATA_RETENTION_TIME_IN_DAYS = {{ data_retention }} {% endif %}
-  {% if comment %} COMMENT = '{{ comment | sql_escape }}' {% endif %};
+  {% if comment %} COMMENT = {{ comment | sql_escape}} {% endif %};
 
 {% elif ddl_command.upper() == 'DROP' %}
 DROP SCHEMA {{ name }};

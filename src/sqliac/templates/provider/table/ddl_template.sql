@@ -13,7 +13,7 @@ CREATE TABLE {{ name }}
 {% if add_cols %} (
 {% for column in add_cols %}
     {{ column.name }} {{ column.type }}{% if column.get('nullable') == 'NO' %} NOT NULL{% endif %}
-    {% if column.get('comment') is not none %}COMMENT '{{ column.comment }}'{% endif %}{% if not loop.last %},{% endif %}
+    {% if column.get('comment') is not none %}COMMENT {{ column.comment | sql_escape}}{% endif %}{% if not loop.last %},{% endif %}
 {% endfor %}
 ){% endif %};
 
@@ -23,7 +23,7 @@ CREATE TABLE {{ name }}
 
 {% for column in add_cols %}
 ALTER TABLE {{ name }} ADD COLUMN {{ column.name }} {{ column.type }}{% if not column.get('nullable', True) %} NOT NULL{% endif %}
-{% if column.get('comment') is not none %}COMMENT '{{ column.comment }}'{% endif %}{% if not loop.last %},{% endif %}
+{% if column.get('comment') is not none %}COMMENT {{ column.comment | sql_escape}}{% endif %}{% if not loop.last %},{% endif %}
 {% endfor %};
 
 {# Handle Changing Columns #}
@@ -33,7 +33,7 @@ ALTER TABLE {{ name }} ALTER COLUMN {{ column.name }} SET DATA TYPE {{ column.ty
 {% endif %}
 
 {% if column.get('comment') is not none %}
-    ALTER TABLE {{ name }} ALTER COLUMN {{ column.name }} COMMENT '{{ column.comment }}';
+    ALTER TABLE {{ name }} ALTER COLUMN {{ column.name }} COMMENT {{ column.comment | sql_escape}};
 {% endif %}
 
 {% if column.get('nullable') == 'YES' %}
@@ -54,7 +54,7 @@ ALTER TABLE {{ name }} DROP COLUMN {{ column.name }};
 
 {# Handle Comment Change #}
 {% if change.get('comment') %}
-ALTER TABLE {{ name }} SET COMMENT = '{{ change.get('comment') }}';
+ALTER TABLE {{ name }} SET COMMENT = {{ change.get('comment') | sql_escape}};
 {% endif %}
 
 {% elif ddl_command.upper() == 'DROP' %}

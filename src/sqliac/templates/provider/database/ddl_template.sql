@@ -23,7 +23,7 @@ DEFAULT_DDL_COLLATION = '{{ default_ddl_collation }}'
 {% endif %}
 
 {% if comment is not none %}
-COMMENT = '{{ comment }}'
+COMMENT = {{ comment | sql_escape}}
 {% endif %};
 
 {% elif ddl_command.upper() == 'DROP' %}
