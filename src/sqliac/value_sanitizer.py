@@ -11,35 +11,14 @@ class ValueSanitizer:
     """Sanitizes config values."""
 
     MAX_DEPTH = 10
-    CASE_SENSITIVE_KEYS = {
-        "comment",
-        "query",
-        "condition",
-        "action",
-        "sql_statement",
-        "url",
-        "aws_sqs_arn",
-        "aws_sqs_role_arn",
-        "storage_aws_role_arn",
-        "storage_allowed_locations",
-        "base_location",
-        "login_name",
-        "display_name",
-        "email",
-        "password",
-        "private_key",
-        "private_key_path",
-        "private_key_passphrase",
-        "schedule",
-    }
 
     @staticmethod
-    def to_upper_string(value: Any, source: str = "") -> str | None:
+    def to_string(value: Any, source: str = "") -> str | None:
         """Convert to string."""
         if value is None:
             return None
         try:
-            return str(value).strip().upper()
+            return str(value).strip()
         except (ValueError, TypeError):
             raise RustyError(
                 error="value error",
@@ -64,7 +43,9 @@ class ValueSanitizer:
                 help="ensure the input is a valid numeric value",
             ) from None
 
-    def _deep_clean_recursive(self, value: Any, depth: int, key: str | None = None) -> Any:
+    def _deep_clean_recursive(
+        self, value: Any, depth: int, key: str | None = None
+    ) -> Any:
         """Internal: Recursively traverse and clean nested structures."""
         if depth > self.MAX_DEPTH:
             raise RustyError(
@@ -74,17 +55,18 @@ class ValueSanitizer:
             )
 
         if isinstance(value, str):
-            if key in self.CASE_SENSITIVE_KEYS:
-                return str(value).strip()
-            return self.to_upper_string(value, source="nested_value")
+            return self.to_string(value, source="nested_value")
 
         if isinstance(value, dict):
             return {
-                k: self._deep_clean_recursive(v, depth + 1, key=k) for k, v in value.items()
+                k: self._deep_clean_recursive(v, depth + 1, key=k)
+                for k, v in value.items()
             }
 
         if isinstance(value, list):
-            return [self._deep_clean_recursive(item, depth + 1, key=key) for item in value]
+            return [
+                self._deep_clean_recursive(item, depth + 1, key=key) for item in value
+            ]
 
         return value
 
