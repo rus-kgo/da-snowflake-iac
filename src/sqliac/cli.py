@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import re
 
 from sqliac import (
     DDLCommand,
@@ -24,20 +25,47 @@ from sqliac.template_engine import TemplateEngine
 from sqliac.utils import box_message
 
 
-def _validate_inputs(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+def _validate_inputs(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+    subparser_map: dict[str, argparse.ArgumentParser] | None = None,
+) -> None:
+    active_subparser = None
+    if subparser_map and args.command in subparser_map:
+        active_subparser = subparser_map[args.command]
+
+    if "threads" in args and (
+        args.threads is None or not re.match(r"^[+-]?[1-9]+$", args.threads)
+    ):
+        print("error: threads value must be a positivie integer greater than 0")
+        if active_subparser is not None:
+            active_subparser.print_help()
+        else:
+            parser.print_help()
+        exit(1)
+
     if args.command == "compile":
+        if not args.template:
+            print("error: compile command requires the type of template\n")
+            if active_subparser is not None:
+                active_subparser.print_help()
+            else:
+                parser.print_help()
+            exit(1)
         if args.template == "ddl" and not args.operation:
             print("error: DDL compilation requires an operation\n")
-            parser.print_help()
+            if active_subparser is not None:
+                active_subparser.print_help()
+            else:
+                parser.print_help()
             exit(1)
 
         if args.template == "state" and args.operation:
             print("error: state compilation does not accept an operation\n")
-            parser.print_help()
-            exit(1)
-        if not args.template and not args.operation:
-            print("error: compile command requires the type of template\n")
-            parser.print_help()
+            if active_subparser is not None:
+                active_subparser.print_help()
+            else:
+                parser.print_help()
             exit(1)
 
 
@@ -189,7 +217,7 @@ def main() -> None:
     apply_parser.add_argument(
         "--threads",
         nargs="?",
-        default=6,
+        default="3",
         help="nubmer of threads",
     )
 
@@ -208,7 +236,7 @@ def main() -> None:
     destroy_parser.add_argument(
         "--threads",
         nargs="?",
-        default=6,
+        default="3",
         help="nubmer of threads",
     )
     destroy_parser.add_argument(
@@ -248,7 +276,16 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    _validate_inputs(compile_parser, args)
+    subparser_map = {
+        "list": subparsers.choices["list"],
+        "graph": subparsers.choices["graph"],
+        "init": subparsers.choices["init"],
+        IacAction.APPLY: subparsers.choices[IacAction.APPLY],
+        IacAction.DESTROY: subparsers.choices[IacAction.DESTROY],
+        "compile": subparsers.choices["compile"],
+    }
+
+    _validate_inputs(parser, args, subparser_map)
     _setup_logging(args.log, args.log_out)
 
     try:
