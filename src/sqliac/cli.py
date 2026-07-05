@@ -207,7 +207,9 @@ def main() -> None:
 
     subparsers = parser.add_subparsers(dest="command")
     subparsers.add_parser("list", help="print available adapters")
-    subparsers.add_parser("graph", help="print resource dependency graph")
+    subparsers.add_parser(
+        "graph", help="print avaliable resources definitions dependency graph"
+    )
     subparsers.add_parser("init", help="project scaffolding")
 
     apply_parser = subparsers.add_parser(
