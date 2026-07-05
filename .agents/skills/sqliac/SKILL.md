@@ -109,7 +109,10 @@ Structural rules are engine-agnostic; syntax comes from the reference file.
     DATA_RETENTION_TIME_IN_DAYS = {{ data_retention }}
   {% endif %}
   ```
-- Quote string values with single quotes in the DDL output.
+- Quote string values using sql escape: 
+  ```sql
+  {% if comment %} COMMENT = {{ comment | sql_escape }} {% endif %}
+  ```
 - Emit raw `true`/`false` for booleans (no quotes) unless the engine
   requires otherwise (see reference file).
 - The three shapes below cover almost every resource — pick the one that
