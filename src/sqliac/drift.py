@@ -87,9 +87,11 @@ class DriftDDLContext:
     def to_dict(self) -> dict[str, Any]:
         """Return data class as a dictionary."""
         return {
-            "ddl_command": self.ddl_command.value
-            if hasattr(self.ddl_command, "value")
-            else self.ddl_command,
+            "ddl_command": (
+                self.ddl_command.value
+                if hasattr(self.ddl_command, "value")
+                else self.ddl_command
+            ),
             "name": self.name,
             "add": self.add,
             "change": self.change,
@@ -252,11 +254,6 @@ class Drift:
             return DriftDDLContext(
                 ddl_command=DDLCommand.NO_ACTION, name=definition.get("name", "")
             )
-
-        drift_ddl_context = DriftDDLContext(
-            ddl_command=DDLCommand.ALTER,
-            name=definition.get("name", ""),
-        )
 
         # If the state is empty, it's a CREATE operation
         if any(
