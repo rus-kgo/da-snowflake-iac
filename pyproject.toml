@@ -3,7 +3,7 @@ name = "sqliac"
 version = "0.1.0"
 description = "An alternative to Terraform for SQL databases without using a state."
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 license = { file = "LICENSE" }
 authors = [
   { name = "Ruslan Gonzalez Konstantinov", email = "rus.kgo.gmail@example.com" },
