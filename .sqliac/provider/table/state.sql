@@ -16,3 +16,21 @@ GROUP BY table_catalog,
          table_schema,
          TABLE_NAME
 LIMIT 1;
+
+   BEGIN
+      LET res RESULTSET := (
+        SELECT object_construct_keep_null(
+            'transient', is_transient = 'YES',
+            'managed_access', is_managed_access = 'YES',
+            'data_retention_time_in_days', retention_time,
+            'comment', COMMENT
+        ) AS object_metadata
+        FROM RUSKGO_TEST.information_schema.schemata
+        WHERE SCHEMA_NAME = 'MODELING_SCHEMA'
+        LIMIT 1
+      );
+      RETURN TABLE(res);
+    EXCEPTION
+      WHEN OTHER THEN
+        RETURN TABLE(SELECT NULL::VARIANT AS object_metadata WHERE 1=0);
+    END;
